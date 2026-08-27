@@ -171,11 +171,17 @@ const SEASONS: Shelf[] = [
 
 // ------------------------------------------------------ Writers & collections
 
-const writer = (slug: string, name: string, group: string): Shelf => ({
+/**
+ * `recipesOnly` is off for the critics and drink writers. Narrowing a profile
+ * to the recipes tag empties their shelves, because reviews and columns are
+ * what they write — their shelf is the column, not a recipe list.
+ */
+const writer = (slug: string, name: string, group: string, recipesOnly = true): Shelf => ({
   id: `writer-${slug}`,
   name,
   group,
   paths: [`/profile/${slug}`],
+  recipesOnly,
 });
 
 const WRITERS: Shelf[] = [
@@ -206,12 +212,12 @@ const WRITERS: Shelf[] = [
     ["jonathan-nunn", "Jonathan Nunn"], ["marina-oloughlin", "Marina O’Loughlin"],
     ["rachelcooke", "Rachel Cooke"], ["timhayward", "Tim Hayward"],
     ["timlewis", "Tim Lewis"], ["tonynaylor", "Tony Naylor"], ["zoewilliams", "Zoe Williams"],
-  ].map(([slug, name]) => writer(slug, name, "Critics & food writers")),
+  ].map(([slug, name]) => writer(slug, name, "Critics & food writers", false)),
   ...[
     ["david-williams", "David Williams"], ["fionabeckett", "Fiona Beckett"],
     ["hannah-crosbie", "Hannah Crosbie"], ["henry-jeffreys", "Henry Jeffreys"],
     ["richard-godwin", "Richard Godwin"],
-  ].map(([slug, name]) => writer(slug, name, "Drink writers")),
+  ].map(([slug, name]) => writer(slug, name, "Drink writers", false)),
 ];
 
 const COLLECTIONS: Shelf[] = [
