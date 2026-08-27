@@ -11,8 +11,9 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Copy, LoaderCircle, Play, XCircle } from "lucide-react";
+import { CheckCircle2, Copy, LoaderCircle, Play, Search, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ALL_SHELVES, TABS, TAB_SHELVES, listingPath } from "@/lib/sources";
 import type { Shelf } from "@/lib/sources";
 
@@ -145,6 +146,31 @@ export function ShelfCheck() {
     }
   }
 
+  // --- Search probe --------------------------------------------------------
+  // Reports what the Guardian actually returns for an ingredient, so a search
+  // that finds nothing can be diagnosed rather than guessed at.
+  const [term, setTerm] = useState("cauliflower");
+  const [probing, setProbing] = useState(false);
+  const [probeText, setProbeText] = useState("");
+  const [probeCopied, setProbeCopied] = useState(false);
+
+  async function runProbe(event: React.FormEvent) {
+    event.preventDefault();
+    if (!term.trim()) return;
+    setProbing(true);
+    setProbeCopied(false);
+    setProbeText("");
+    try {
+      const response = await fetch(`/api/probe/${encodeURIComponent(term.trim())}`);
+      const data = await response.json();
+      setProbeText(JSON.stringify(data, null, 1));
+    } catch (reason) {
+      setProbeText(reason instanceof Error ? reason.message : "The probe failed.");
+    } finally {
+      setProbing(false);
+    }
+  }
+
   return (
     <main className="site-shell check-page">
       <header className="masthead">
@@ -186,6 +212,41 @@ export function ShelfCheck() {
           <textarea className="check-report" readOnly value={report} rows={20} />
         </>
       ) : null}
+
+      <h2 className="check-subhead">Search probe</h2>
+      <p className="check-intro">
+        Asks the Guardian directly about one ingredient and reports what comes back. Use this when a
+        search finds nothing — it shows whether the tag is missing or the page could not be read.
+      </p>
+      <form className="check-probe" onSubmit={runProbe}>
+        <label className="search-field">
+          <span className="sr-only">Ingredient to probe</span>
+          <Search aria-hidden="true" />
+          <Input value={term} onChange={(event) => setTerm(event.target.value)} placeholder="cauliflower" />
+        </label>
+        <Button type="submit" disabled={probing || !term.trim()}>
+          {probing ? <LoaderCircle className="spin" /> : <Play />}
+          {probing ? "Asking the Guardian…" : "Probe"}
+        </Button>
+        {probeText ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(probeText);
+                setProbeCopied(true);
+                setTimeout(() => setProbeCopied(false), 2500);
+              } catch {
+                // Clipboard blocked — the box below is the fallback.
+              }
+            }}
+          >
+            <Copy /> {probeCopied ? "Copied" : "Copy"}
+          </Button>
+        ) : null}
+      </form>
+      {probeText ? <textarea className="check-report" readOnly value={probeText} rows={18} /> : null}
 
       <h2 className="check-subhead">Every shelf</h2>
       <ol className="check-list">
