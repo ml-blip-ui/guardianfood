@@ -154,20 +154,21 @@ export async function fetchFeedPage(paths: string[], page: number): Promise<Feed
 }
 
 /**
- * Ingredient search.
+ * Ingredient search, by Guardian tag.
  *
- * The Guardian keeps a tag for most ingredients, and intersecting it with the
- * recipes tag is the same mechanism the shelves use — proven to work. So a
- * search for "cauliflower" first tries /tone/recipes+food/cauliflower, which
- * returns a proper recipe listing rather than whatever a text search turns up.
+ * The Guardian retired its own site search and hands off to Google, so
+ * /search?q= is a 404 and there is nothing to scrape. What does work is the
+ * tag system: /tone/recipes+food/eggs returns a proper recipe listing, the
+ * same mechanism the shelves use.
  *
- * Only when no tag matches does it fall back to scraping the Guardian's own
- * search results, which covers the long tail but is markup we do not control.
+ * So a search is a tag lookup. When the Guardian has no tag for a word — it
+ * tags eggs and tomatoes but not cauliflower — there is no in-app answer, and
+ * the caller offers a Google site search instead.
  */
 
 export type SearchResult = FeedPage & {
-  /** Which route produced these results, and what each one found. */
-  route: "tag" | "text" | "none";
+  /** Whether a Guardian tag answered this, and which paths were tried. */
+  route: "tag" | "none";
   tried: string[];
 };
 
@@ -197,29 +198,6 @@ export function tagCandidates(slug: string) {
   return [...variants].filter(Boolean);
 }
 
-async function textSearch(query: string, page: number): Promise<Article[]> {
-  const url = `${GUARDIAN}/search?q=${encodeURIComponent(query)}&page=${page}`;
-  try {
-    const response = await fetch(url, {
-      headers: { "User-Agent": "Guardian Recipe Finder/2.0 (personal index reader)" },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      next: { revalidate: 900 },
-    });
-    if (!response.ok) {
-      console.error(`[guardian] search "${query}" returned ${response.status}`);
-      return [];
-    }
-    const items = parseListing(await response.text());
-    // Guardian search spans the whole paper, so bias it back towards food.
-    const food = items.filter((item) => /theguardian\.com\/(food|lifeandstyle)\//.test(item.link));
-    console.error(`[guardian] search "${query}" parsed ${items.length}, kept ${food.length}`);
-    return food;
-  } catch (reason) {
-    console.error(`[guardian] search "${query}" failed:`, reason);
-    return [];
-  }
-}
-
 export async function search(query: string, page: number): Promise<SearchResult> {
   const slug = slugify(query);
   if (!slug) return { items: [], page, hasMore: false, route: "none", tried: [] };
@@ -231,18 +209,11 @@ export async function search(query: string, page: number): Promise<SearchResult>
     return { items: fromTag, page, hasMore: fromTag.length > 0, route: "tag", tried: tagPaths };
   }
 
-  // Past the first page an empty tag result means the end of that tag, not a
-  // reason to start mixing in unrelated text-search hits.
-  if (page > 1) {
-    return { items: [], page, hasMore: false, route: "tag", tried: tagPaths };
-  }
+  return { items: [], page, hasMore: false, route: "none", tried: tagPaths };
+}
 
-  const fromText = await textSearch(query, page);
-  return {
-    items: fromText,
-    page,
-    hasMore: fromText.length > 0,
-    route: fromText.length ? "text" : "none",
-    tried: [...tagPaths, `/search?q=${encodeURIComponent(query)}`],
-  };
+/** Where to send someone when the Guardian has no tag for what they typed. */
+export function googleSiteSearch(term: string) {
+  const query = `site:theguardian.com/food ${term} recipe`;
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }

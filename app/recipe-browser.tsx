@@ -24,6 +24,7 @@ import {
   tabOf,
 } from "@/lib/sources";
 import type { Shelf, TabKey } from "@/lib/sources";
+import { googleSiteSearch } from "@/lib/guardian";
 
 const GUARDIAN = "https://www.theguardian.com";
 const STARRED_KEY = "grf.starred";
@@ -46,7 +47,7 @@ type Feed = {
   hasMore: boolean;
   error: string;
   /** How a search found its results, and what it looked for. */
-  route?: "tag" | "text" | "none";
+  route?: "tag" | "none";
   tried?: string[];
 };
 
@@ -407,17 +408,17 @@ export function RecipeBrowser() {
           {showSearch ? (
             <form className="ingredient-search" onSubmit={submitSearch}>
               <label className="search-field">
-                <span className="sr-only">Search all Guardian recipes</span>
+                <span className="sr-only">Find recipes by ingredient</span>
                 <Search aria-hidden="true" />
                 <Input
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Search all Guardian recipes…"
+                  placeholder="Type an ingredient…"
                   enterKeyHint="search"
                 />
               </label>
               <Button type="submit" disabled={draft.trim().length < 2}>Search</Button>
-              <p>Whatever is in the fridge — cauliflower, anchovies, a glut of courgettes.</p>
+              <p>Jumps straight to an ingredient. Anything the Guardian doesn’t tag, you’ll be offered on Google.</p>
             </form>
           ) : (
             <label className="search-field jump-field">
@@ -478,7 +479,7 @@ export function RecipeBrowser() {
                 {loading
                   ? "Loading…"
                   : searching
-                    ? `${items.length} ${feed.route === "text" ? "text-search result" : "recipe"}${items.length === 1 ? "" : "s"}${feed.hasMore ? ", more as you scroll" : ""}`
+                    ? `${items.length} recipe${items.length === 1 ? "" : "s"}${feed.hasMore ? ", more as you scroll" : ""}`
                     : shelf.note ?? `${items.length} articles${feed.hasMore ? ", more as you scroll" : ""}`}
               </p>
             </div>
@@ -511,12 +512,15 @@ export function RecipeBrowser() {
               {searching ? (
                 <>
                   <p>
-                    The Guardian has no recipe tag for “{searchTerm}”, and a text search found nothing
-                    either. Try a plainer word — “squash” rather than “butternut squash”.
+                    The Guardian doesn’t tag “{searchTerm}”, so it can’t be looked up here. It
+                    retired its own search and hands off to Google, which will find it.
                   </p>
-                  {feed.tried?.length ? (
-                    <p className="feed-tried">Looked in: {feed.tried.join("  ·  ")}</p>
-                  ) : null}
+                  <Button asChild>
+                    <a href={googleSiteSearch(searchTerm)} target="_blank" rel="noreferrer">
+                      Search the Guardian on Google <ExternalLink />
+                    </a>
+                  </Button>
+                  <p className="feed-tried">Tried: {feed.tried?.join("  ·  ")}</p>
                 </>
               ) : (
                 <p>This shelf came back empty.</p>

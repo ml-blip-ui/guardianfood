@@ -455,3 +455,4 @@ footer svg { width: 12px; }
 .feed-tried { max-width: 100%; margin-top: -6px; color: var(--quiet); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem; overflow-wrap: anywhere; }
 .check-probe { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
 .check-probe .search-field { flex: 1 1 220px; }
+.feed-message .feed-tried { margin-top: 18px; }

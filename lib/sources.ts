@@ -107,15 +107,46 @@ const START: Shelf[] = [
 
 // --------------------------------------------------------------- Ingredients
 
-const INGREDIENTS: Shelf[] = [
-  ["chicken", "Chicken"], ["eggs", "Eggs"], ["pasta", "Pasta"],
-  ["rice", "Rice"], ["tofu", "Tofu"], ["noodles", "Noodles"],
-].map(([slug, name]) => ({
+/**
+ * The Guardian has no site search of its own — it hands off to Google — so an
+ * ingredient is only findable in this app if the Guardian tags it. These are
+ * the candidates; the shelf check at /check reports which ones actually exist,
+ * and the dead ones get pruned.
+ */
+const ingredient = (slug: string, name: string, group: string): Shelf => ({
   id: `ingredient-${slug}`,
   name,
-  group: "In the fridge",
+  group,
   paths: [food(slug)],
-}));
+});
+
+const INGREDIENTS: Shelf[] = [
+  ...[
+    ["chicken", "Chicken"], ["beef", "Beef"], ["pork", "Pork"], ["lamb", "Lamb"],
+    ["duck", "Duck"], ["sausages", "Sausages"], ["eggs", "Eggs"], ["tofu", "Tofu"],
+    ["fish", "Fish"], ["seafood", "Seafood"], ["shellfish", "Shellfish"],
+    ["prawns", "Prawns"], ["salmon", "Salmon"], ["anchovies", "Anchovies"],
+  ].map(([slug, name]) => ingredient(slug, name, "Meat, fish & protein")),
+  ...[
+    ["vegetables", "Vegetables"], ["potatoes", "Potatoes"], ["tomatoes", "Tomatoes"],
+    ["mushrooms", "Mushrooms"], ["onions", "Onions"], ["garlic", "Garlic"],
+    ["aubergine", "Aubergine"], ["courgettes", "Courgettes"], ["cauliflower", "Cauliflower"],
+    ["broccoli", "Broccoli"], ["cabbage", "Cabbage"], ["carrots", "Carrots"],
+    ["peppers", "Peppers"], ["spinach", "Spinach"], ["peas", "Peas"],
+    ["squash", "Squash"], ["pumpkin", "Pumpkin"], ["corn", "Corn"],
+  ].map(([slug, name]) => ingredient(slug, name, "Vegetables")),
+  ...[
+    ["pasta", "Pasta"], ["rice", "Rice"], ["noodles", "Noodles"], ["bread", "Bread"],
+    ["polenta", "Polenta"], ["beans", "Beans"], ["lentils", "Lentils"],
+    ["chickpeas", "Chickpeas"], ["nuts", "Nuts"], ["olives", "Olives"],
+    ["herbs", "Herbs"], ["spices", "Spices"],
+  ].map(([slug, name]) => ingredient(slug, name, "Store cupboard")),
+  ...[
+    ["cheese", "Cheese"], ["milk", "Milk"], ["yoghurt", "Yoghurt"], ["butter", "Butter"],
+    ["chocolate", "Chocolate"], ["fruit", "Fruit"], ["lemons", "Lemons"],
+    ["apples", "Apples"], ["berries", "Berries"], ["rhubarb", "Rhubarb"],
+  ].map(([slug, name]) => ingredient(slug, name, "Dairy, fruit & sweet")),
+];
 
 // --------------------------------------------------- Cuisines & meal courses
 
