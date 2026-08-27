@@ -5,7 +5,7 @@
 [build.environment]
   NODE_VERSION = "22"
 
-[[headers]]
-  for = "/api/feed"
-  [headers.values]
-    Cache-Control = "public, s-maxage=1800, stale-while-revalidate=7200"
+# No [[headers]] rule for the API routes. A path-scoped Cache-Control here was
+# once applied to /api/feed while the shelf travelled in a query string, so the
+# edge cached one shelf's articles and served them for every shelf. The routes
+# set their own Cache-Control, and each shelf now has its own path.

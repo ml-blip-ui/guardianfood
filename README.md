@@ -66,11 +66,17 @@ Node.js version.
 
 The browser talks to two server-side routes:
 
-- `/api/feed?id=<shelf>` — fetches one or more Guardian listing pages and
+- `/api/feed/<shelf>/<page>` — fetches one or more Guardian listing pages and
   merges them. Shelves are resolved by id against `lib/sources.ts`, so the
   route can only ever fetch paths listed there.
-- `/api/search?q=<term>` — passes a search through to the Guardian and keeps
-  the food results.
+- `/api/search/<term>/<page>` — passes a search through to the Guardian and
+  keeps the food results.
+
+The shelf travels in the path rather than a query string on purpose. When it
+was `?id=…`, Netlify's CDN cached the response against the path alone and
+served one shelf's articles for every shelf. Each response also echoes the
+shelf it belongs to, and the app refuses to render one that does not match
+what it asked for — a wrong list is worse than a visible error.
 
 The routes are server-side because browsers cannot request Guardian pages
 directly, and responses are cached for half an hour.

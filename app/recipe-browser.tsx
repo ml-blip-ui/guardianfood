@@ -199,11 +199,26 @@ export function RecipeBrowser() {
 
   // ------------------------------------------------------------------ loading
 
+  // Shelf and page are path segments, not query parameters: a CDN keying its
+  // cache on the path alone would otherwise serve one shelf for all of them.
   const requestUrl = useCallback(
     (page: number) =>
       searching
-        ? `/api/search?q=${encodeURIComponent(searchTerm)}&page=${page}`
-        : `/api/feed?id=${encodeURIComponent(shelfId)}&page=${page}`,
+        ? `/api/search/${encodeURIComponent(searchTerm)}/${page}`
+        : `/api/feed/${encodeURIComponent(shelfId)}/${page}`,
+    [searching, searchTerm, shelfId],
+  );
+
+  /** Refuse a response that belongs to a different shelf than we asked for. */
+  const assertMatches = useCallback(
+    <T extends { id?: string; query?: string }>(data: T): T => {
+      const wanted = searching ? searchTerm : shelfId;
+      const got = searching ? data.query : data.id;
+      if (got !== undefined && got !== wanted) {
+        throw new Error(`The server sent “${got}” when this page asked for “${wanted}”. Reload to try again.`);
+      }
+      return data;
+    },
     [searching, searchTerm, shelfId],
   );
 
@@ -214,7 +229,7 @@ export function RecipeBrowser() {
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Could not load this list.");
-        return data;
+        return assertMatches(data);
       })
       .then((data) =>
         setFeed({
@@ -231,7 +246,7 @@ export function RecipeBrowser() {
         }
       });
     return () => controller.abort();
-  }, [feedKey, requestUrl]);
+  }, [assertMatches, feedKey, requestUrl]);
 
   const loadMore = useCallback(async () => {
     if (inFlight.current || loading || !feed.hasMore || feed.error) return;
@@ -242,6 +257,7 @@ export function RecipeBrowser() {
       const response = await fetch(requestUrl(nextPage));
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not load older recipes.");
+      assertMatches(data);
       setFeed((current) => {
         if (current.key !== feedKey) return current;
         const links = new Set(current.items.map((item) => item.link));
@@ -259,7 +275,7 @@ export function RecipeBrowser() {
       inFlight.current = false;
       setLoadingMore(false);
     }
-  }, [feed.error, feed.hasMore, feed.page, feedKey, loading, requestUrl]);
+  }, [assertMatches, feed.error, feed.hasMore, feed.page, feedKey, loading, requestUrl]);
 
   useEffect(() => {
     const node = sentinel.current;

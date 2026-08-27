@@ -68,7 +68,7 @@ export function ShelfCheck() {
         if (!shelf) return;
         update(shelf.id, { state: "checking" });
         try {
-          const response = await fetch(`/api/feed?id=${encodeURIComponent(shelf.id)}&page=1`);
+          const response = await fetch(`/api/feed/${encodeURIComponent(shelf.id)}/1`);
           const data = await response.json();
           if (!response.ok) {
             update(shelf.id, { state: "failed", detail: data.error ?? `HTTP ${response.status}` });
