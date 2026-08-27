@@ -14,6 +14,8 @@ export async function GET(
   }
 
   const result = await search(query, page);
+  // `route` and `tried` are echoed so a search that finds nothing can say what
+  // it actually looked for, rather than just shrugging.
   return NextResponse.json(
     { ...result, query },
     { headers: { "Cache-Control": "public, s-maxage=900, stale-while-revalidate=3600" } },

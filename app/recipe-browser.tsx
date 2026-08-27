@@ -45,6 +45,9 @@ type Feed = {
   page: number;
   hasMore: boolean;
   error: string;
+  /** How a search found its results, and what it looked for. */
+  route?: "tag" | "text" | "none";
+  tried?: string[];
 };
 
 const EMPTY_FEED: Feed = { key: "", items: [], page: 0, hasMore: false, error: "" };
@@ -238,6 +241,8 @@ export function RecipeBrowser() {
           page: data.page ?? 1,
           hasMore: data.hasMore ?? false,
           error: "",
+          route: data.route,
+          tried: data.tried,
         }),
       )
       .catch((reason: Error) => {
@@ -473,7 +478,7 @@ export function RecipeBrowser() {
                 {loading
                   ? "Loading…"
                   : searching
-                    ? `${items.length} results${feed.hasMore ? ", more as you scroll" : ""}`
+                    ? `${items.length} ${feed.route === "text" ? "text-search result" : "recipe"}${items.length === 1 ? "" : "s"}${feed.hasMore ? ", more as you scroll" : ""}`
                     : shelf.note ?? `${items.length} articles${feed.hasMore ? ", more as you scroll" : ""}`}
               </p>
             </div>
@@ -503,7 +508,19 @@ export function RecipeBrowser() {
             <div className="feed-message compact">
               <Search aria-hidden="true" />
               <h3>Nothing here</h3>
-              <p>{searching ? "No Guardian food articles matched that." : "This shelf came back empty."}</p>
+              {searching ? (
+                <>
+                  <p>
+                    The Guardian has no recipe tag for “{searchTerm}”, and a text search found nothing
+                    either. Try a plainer word — “squash” rather than “butternut squash”.
+                  </p>
+                  {feed.tried?.length ? (
+                    <p className="feed-tried">Looked in: {feed.tried.join("  ·  ")}</p>
+                  ) : null}
+                </>
+              ) : (
+                <p>This shelf came back empty.</p>
+              )}
             </div>
           ) : null}
 

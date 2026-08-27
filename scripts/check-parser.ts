@@ -8,7 +8,7 @@
  * the parsing code cannot quietly break titles, dates or de-duplication.
  */
 
-import { dateFromUrl, parseListing } from "../lib/guardian.ts";
+import { dateFromUrl, parseListing, slugify, tagCandidates } from "../lib/guardian.ts";
 
 let failures = 0;
 
@@ -74,6 +74,22 @@ check("Friday joins its Saturday", issueOf("2026-07-31T00:00:00.000Z"), "2026-08
 check("Saturday is its own issue", issueOf("2026-08-01T00:00:00.000Z"), "2026-08-01");
 check("Sunday joins the Saturday before", issueOf("2026-08-02T00:00:00.000Z"), "2026-08-01");
 check("the next Monday starts a new issue", issueOf("2026-08-03T00:00:00.000Z"), "2026-08-08");
+
+console.log("ingredient search terms");
+check("lowercases and trims", slugify("  Cauliflower "), "cauliflower");
+check("hyphenates multiple words", slugify("black beans"), "black-beans");
+check("strips accents", slugify("jalapeño"), "jalapeno");
+check("drops punctuation", slugify("chef's knife!"), "chef-s-knife");
+
+// Guardian ingredient tags are inconsistently pluralised, so a typed word has
+// to try the obvious variants before falling back to a text search.
+check("cauliflower tries its plural", tagCandidates("cauliflower").includes("cauliflowers"), true);
+check("eggs tries its singular", tagCandidates("eggs").includes("egg"), true);
+check("tomatoes tries its singular", tagCandidates("tomatoes").includes("tomato"), true);
+check("potato tries -es", tagCandidates("potato").includes("potatoes"), true);
+check("the typed word is always tried first", tagCandidates("pasta")[0], "pasta");
+check("an -es plural does not also try a stray -e", tagCandidates("tomatoes"), ["tomatoes", "tomato"]);
+check("at most three paths are ever tried", Math.max(...["cauliflower","eggs","tomatoes","potato","pasta","squash"].map((w) => tagCandidates(w).length)) <= 3, true);
 
 console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
 process.exit(failures ? 1 : 0);
