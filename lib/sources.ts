@@ -72,17 +72,6 @@ const START: Shelf[] = [
     weekly: true,
     note: "Grouped into weekly issues, as it appears in print.",
   },
-  {
-    id: "the-filter-food",
-    name: "The Filter: food",
-    group: "The main feeds",
-    // The Filter covers everything from laptops to mattresses; this
-    // intersection is what keeps it to the food taste tests.
-    paths: ["/thefilter+food/food"],
-    recipesOnly: false,
-    note: "Taste tests and product reviews rather than recipes.",
-  },
-
   { id: "quick-and-easy", name: "Quick and easy", group: "Weeknight cooking", paths: [series("quick-and-easy")] },
   { id: "30-minute", name: "30 minute meals", group: "Weeknight cooking", paths: [series("30-minute-recipes")] },
   { id: "budget", name: "Budget cooking", group: "Weeknight cooking", paths: [series("1-pound-meals")] },
@@ -187,7 +176,7 @@ const writer = (slug: string, name: string, group: string, recipesOnly = true): 
 const WRITERS: Shelf[] = [
   ...[
     ["alice-zaslavsky", "Alice Zaslavsky"], ["anna-jones", "Anna Jones"],
-    ["chetna-makan", "Chetna Makan"], ["claire-thomson", "Claire Thomson"],
+    ["claire-thomson", "Claire Thomson"],
     ["felicity-cloake", "Felicity Cloake"], ["georgina-hayden", "Georgina Hayden"],
     ["hughfearnleywhittingstall", "Hugh Fearnley-Whittingstall"],
     ["itamar-srulovich", "Itamar Srulovich"], ["ixta-belfrage", "Ixta Belfrage"],
@@ -202,9 +191,8 @@ const WRITERS: Shelf[] = [
   ].map(([slug, name]) => writer(slug, name, "Cooks & recipe writers")),
   ...[
     ["benjamina-ebuehi", "Benjamina Ebuehi"], ["ravneet-gill", "Ravneet Gill"],
-    ["edd-kimber", "Edd Kimber"], ["ruby-tandoh", "Ruby Tandoh"],
-    ["claireptak", "Claire Ptak"], ["richard-bertinet", "Richard Bertinet"],
-    ["danlepard", "Dan Lepard"], ["philip-khoury", "Philip Khoury"],
+    ["ruby-tandoh", "Ruby Tandoh"],
+    ["claireptak", "Claire Ptak"], ["danlepard", "Dan Lepard"], ["philip-khoury", "Philip Khoury"],
     ["kim-joy", "Kim-Joy"],
   ].map(([slug, name]) => writer(slug, name, "Baking & desserts")),
   ...[
