@@ -17,6 +17,8 @@ import { ALL_SHELVES, TABS, TAB_SHELVES, listingPath } from "@/lib/sources";
 import type { Shelf } from "@/lib/sources";
 
 const CONCURRENCY = 3;
+/** Shelves below this are worth a second look — see the report. */
+const SPARSE_THRESHOLD = 10;
 
 type Row = {
   shelf: Shelf;
@@ -108,15 +110,28 @@ export function ShelfCheck() {
       (r.detail ? ` — ${r.detail}` : ` — ${r.articles} articles`);
     const failed = rows.filter((r) => r.state === "failed");
     const thin = rows.filter((r) => r.state === "thin");
+    // The Guardian returns up to 20 per page and this only reads page one, so
+    // a count of 20 means "20 or more", not exactly 20.
+    const byCount = [...rows]
+      .filter((r) => r.state !== "waiting" && r.state !== "checking")
+      .sort((a, b) => a.articles - b.articles || a.shelf.name.localeCompare(b.shelf.name));
+    const sparse = byCount.filter((r) => r.articles < SPARSE_THRESHOLD);
     return [
       `Shelf check — ${new Date().toISOString()}`,
       `${counts.ok} working, ${counts.thin} thin, ${counts.failed} failed, of ${rows.length} shelves`,
+      "Counts are from page one only, so 20 means 20 or more.",
       "",
       failed.length ? `FAILED (${failed.length}):` : "FAILED: none",
       ...failed.map((r) => `  ${line(r)}`),
       "",
       thin.length ? `THIN — under 5 articles (${thin.length}):` : "THIN: none",
       ...thin.map((r) => `  ${line(r)}`),
+      "",
+      `UNDER ${SPARSE_THRESHOLD} ARTICLES (${sparse.length}):`,
+      ...sparse.map((r) => `  ${r.articles.toString().padStart(2)} — ${r.shelf.name} [${r.tab}]`),
+      "",
+      "EVERY SHELF BY COUNT (fewest first):",
+      ...byCount.map((r) => `  ${r.articles.toString().padStart(2)} — ${r.shelf.name} [${r.tab}]`),
     ].join("\n");
   }, [done, rows, counts]);
 
@@ -129,8 +144,6 @@ export function ShelfCheck() {
       // Clipboard blocked — the textarea below is the fallback.
     }
   }
-
-  const problems = rows.filter((r) => r.state === "failed" || r.state === "thin");
 
   return (
     <main className="site-shell check-page">
@@ -169,8 +182,8 @@ export function ShelfCheck() {
 
       {done ? (
         <>
-          <h2 className="check-subhead">{problems.length ? "Send this back to Claude" : "Everything works"}</h2>
-          <textarea className="check-report" readOnly value={report} rows={Math.min(24, report.split("\n").length + 1)} />
+          <h2 className="check-subhead">Send this back to Claude</h2>
+          <textarea className="check-report" readOnly value={report} rows={20} />
         </>
       ) : null}
 
