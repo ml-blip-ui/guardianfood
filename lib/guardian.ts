@@ -1,0 +1,177 @@
+/**
+ * Reads public Guardian listing pages and turns them into article records.
+ *
+ * Deliberately conservative about what it trusts in the markup: the title
+ * comes from the link's aria-label and the date from the URL itself, both of
+ * which survive a restyle. Images, kickers and descriptions are best-effort
+ * and simply come back empty if the Guardian changes its markup.
+ */
+
+const GUARDIAN = "https://www.theguardian.com";
+const ARTICLE_PATH = /^(?:\/[a-z0-9-]+){1,3}\/\d{4}\/[a-z]{3}\/\d{1,2}\//i;
+const FETCH_TIMEOUT_MS = 8000;
+
+export type Article = {
+  title: string;
+  link: string;
+  description: string;
+  kicker: string;
+  /** ISO date, derived from the article URL. */
+  published: string;
+  image: string;
+};
+
+const MONTHS: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+
+/**
+ * Guardian article URLs carry their own date (/2026/aug/01/), which is far
+ * more dependable than the markup around them.
+ */
+export function dateFromUrl(href: string): string {
+  const match = href.match(/\/(\d{4})\/([a-z]{3})\/(\d{1,2})\//i);
+  if (!match) return "";
+  const month = MONTHS[match[2].toLowerCase()];
+  if (month === undefined) return "";
+  return new Date(Date.UTC(Number(match[1]), month, Number(match[3]))).toISOString();
+}
+
+function decodeHtml(value: string) {
+  return value
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;|&#x22;/g, '"')
+    .replace(/&#39;|&#x27;|&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+function attribute(tag: string, name: string) {
+  const match = tag.match(new RegExp(`\\b${name}=["']([^"']*)["']`, "i"));
+  return match ? decodeHtml(match[1].trim()) : "";
+}
+
+/** Strip markup first, then decode entities, so encoded angle brackets survive. */
+function plainText(value: string) {
+  const withoutTags = value
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ");
+  return decodeHtml(withoutTags).replace(/\s+/g, " ").trim();
+}
+
+export function parseListing(html: string): Article[] {
+  const anchors = [...html.matchAll(/<a\b[^>]*>/gi)]
+    .map((match) => ({
+      index: match.index ?? 0,
+      href: attribute(match[0], "href"),
+      label: attribute(match[0], "aria-label"),
+    }))
+    .filter((anchor) => ARTICLE_PATH.test(anchor.href) && anchor.label);
+
+  const seen = new Set<string>();
+  const articles: Article[] = [];
+
+  anchors.forEach((anchor, index) => {
+    if (seen.has(anchor.href)) return;
+    seen.add(anchor.href);
+
+    const nextIndex = anchors[index + 1]?.index ?? Math.min(anchor.index + 12000, html.length);
+    const card = html.slice(anchor.index, nextIndex);
+
+    const imageTag = card.match(/<img\b[^>]*\bsrc=["'][^"']+["'][^>]*>/i)?.[0] ?? "";
+    const headline = card.match(/<h3\b[^>]*class=["'][^"']*card-headline[^"']*["'][^>]*>([\s\S]*?)<\/h3>/i)?.[1] ?? "";
+    const kicker = headline.match(/<div\b[^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? "";
+    // Generated class name, so this is the first thing to break on a Guardian
+    // deploy. Losing it costs a description, nothing more.
+    const description = card.match(/<div\b[^>]*class=["'][^"']*dcr-[a-z0-9]+[^"']*["'][^>]*>[\s\S]*?<div\b[^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? "";
+
+    articles.push({
+      title: plainText(anchor.label),
+      link: `${GUARDIAN}${anchor.href}`,
+      description: plainText(description),
+      kicker: plainText(kicker),
+      published: dateFromUrl(anchor.href),
+      image: attribute(imageTag, "src"),
+    });
+  });
+
+  return articles;
+}
+
+async function fetchListing(path: string, page: number): Promise<Article[]> {
+  const url = `${GUARDIAN}${path}?page=${page}`;
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "Guardian Recipe Finder/2.0 (personal index reader)" },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      next: { revalidate: 1800 },
+    });
+    if (!response.ok) {
+      console.error(`[guardian] ${url} returned ${response.status}`);
+      return [];
+    }
+    return parseListing(await response.text());
+  } catch (reason) {
+    console.error(`[guardian] ${url} failed:`, reason);
+    return [];
+  }
+}
+
+export type FeedPage = {
+  items: Article[];
+  page: number;
+  hasMore: boolean;
+};
+
+/**
+ * Fetch one page from each path and merge them.
+ *
+ * Merged pages are sorted internally but appended whole by the client rather
+ * than re-sorted across pages: for a blended shelf like Drinks that keeps the
+ * feed from reshuffling under the reader mid-scroll, at the cost of slightly
+ * ragged ordering where one page meets the next.
+ */
+export async function fetchFeedPage(paths: string[], page: number): Promise<FeedPage> {
+  const results = await Promise.all(paths.map((path) => fetchListing(path, page)));
+
+  const seen = new Set<string>();
+  const items: Article[] = [];
+  for (const result of results) {
+    for (const article of result) {
+      if (seen.has(article.link)) continue;
+      seen.add(article.link);
+      items.push(article);
+    }
+  }
+
+  items.sort((a, b) => (a.published < b.published ? 1 : a.published > b.published ? -1 : 0));
+
+  return { items, page, hasMore: items.length > 0 };
+}
+
+/** Guardian-wide search, used by the Ingredients tab. */
+export async function search(query: string, page: number): Promise<FeedPage> {
+  const url = `${GUARDIAN}/search?q=${encodeURIComponent(query)}&page=${page}`;
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "Guardian Recipe Finder/2.0 (personal index reader)" },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      next: { revalidate: 900 },
+    });
+    if (!response.ok) {
+      console.error(`[guardian] search "${query}" returned ${response.status}`);
+      return { items: [], page, hasMore: false };
+    }
+    const items = parseListing(await response.text());
+    // Guardian search spans the whole paper, so bias it back towards food.
+    const food = items.filter((item) => /theguardian\.com\/(food|thefilter|lifeandstyle)\//.test(item.link));
+    return { items: food, page, hasMore: items.length > 0 };
+  } catch (reason) {
+    console.error(`[guardian] search "${query}" failed:`, reason);
+    return { items: [], page, hasMore: false };
+  }
+}

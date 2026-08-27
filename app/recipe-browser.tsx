@@ -1,94 +1,100 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
   BookOpenText,
-  ChefHat,
-  Clock3,
+  ChevronDown,
   ExternalLink,
   Feather,
   LoaderCircle,
   Search,
-  SlidersHorizontal,
-  UtensilsCrossed,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { collections, SOURCE_COUNT, topics, writers } from "./data";
-import type { Source } from "./data";
+import {
+  ALL_SHELVES,
+  DEFAULT_SHELF_ID,
+  TAB_SHELVES,
+  TABS,
+  shelfById,
+  tabOf,
+} from "@/lib/sources";
+import type { Shelf, TabKey } from "@/lib/sources";
 
-type FeedItem = {
+const GUARDIAN = "https://www.theguardian.com";
+const STARRED_KEY = "grf.starred";
+const RECENT_KEY = "grf.recent";
+const RECENT_LIMIT = 5;
+
+type Article = {
   title: string;
   link: string;
-  creator: string;
   description: string;
-  categories: string[];
+  kicker: string;
   published: string;
   image: string;
 };
 
-const GUARDIAN = "https://www.theguardian.com";
-const sourceSets = { collections, topics, writers };
-type View = keyof typeof sourceSets;
+type Feed = {
+  key: string;
+  items: Article[];
+  page: number;
+  hasMore: boolean;
+  error: string;
+};
+
+const EMPTY_FEED: Feed = { key: "", items: [], page: 0, hasMore: false, error: "" };
 
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(date);
+}
+
+/**
+ * The Saturday of the week an article belongs to. Feast pieces go online
+ * across Thursday to Sunday around the printed issue, so bucketing by week
+ * gathers one issue under one heading.
+ */
+function issueOf(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const mondayOffset = (date.getUTCDay() + 6) % 7;
+  const saturday = new Date(date);
+  saturday.setUTCDate(date.getUTCDate() - mondayOffset + 5);
+  return saturday;
+}
+
+function issueLabel(date: Date) {
   return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
     day: "numeric",
-    month: "short",
+    month: "long",
     year: "numeric",
+    timeZone: "UTC",
   }).format(date);
 }
 
-function SourceList({
-  sources,
-  active,
-  onSelect,
-}: {
-  sources: Source[];
-  active: Source;
-  onSelect: (source: Source) => void;
-}) {
-  const grouped = useMemo(() => {
-    return sources.reduce<Record<string, Source[]>>((result, source) => {
-      (result[source.group] ??= []).push(source);
-      return result;
-    }, {});
-  }, [sources]);
-
-  if (!sources.length) {
-    return <p className="empty-copy">No matching sources. Try a broader search.</p>;
+function readStore(key: string): string[] {
+  try {
+    const raw = window.localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((entry) => typeof entry === "string") : [];
+  } catch {
+    return [];
   }
+}
 
-  return (
-    <div className="source-groups">
-      {Object.entries(grouped).map(([group, items]) => (
-        <section key={group} className="source-group">
-          <h3>{group}</h3>
-          <div>
-            {items.map((source) => (
-              <button
-                type="button"
-                key={source.path}
-                className="source-row"
-                data-active={active.path === source.path}
-                onClick={() => onSelect(source)}
-                aria-pressed={active.path === source.path}
-              >
-                <span>{source.name}</span>
-                <ArrowUpRight aria-hidden="true" />
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
-  );
+function writeStore(key: string, value: string[]) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // A private window or blocked storage just means no pinning this session.
+  }
 }
 
 function ArticleSkeleton() {
@@ -109,94 +115,137 @@ function ArticleSkeleton() {
   );
 }
 
+function ArticleRow({ item }: { item: Article }) {
+  return (
+    <article className="article-row">
+      <a className="article-main" href={item.link} target="_blank" rel="noreferrer">
+        <div className="article-meta">
+          {item.kicker ? <span>{item.kicker}</span> : null}
+          {item.published ? <time dateTime={item.published}>{formatDate(item.published)}</time> : null}
+        </div>
+        <h3>{item.title}</h3>
+        {item.description ? <p>{item.description}</p> : null}
+        <div className="article-byline">
+          <span className="read-link">Read on the Guardian <ArrowUpRight /></span>
+        </div>
+      </a>
+      {item.image ? (
+        <a className="article-image" href={item.link} target="_blank" rel="noreferrer" tabIndex={-1} aria-hidden="true">
+          {/* Images are served by the Guardian and every one links back to the source article.
+              Kept as a plain img so there is no remote-host allowlist to maintain. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={item.image} alt="" loading="lazy" referrerPolicy="no-referrer" />
+        </a>
+      ) : null}
+    </article>
+  );
+}
+
 export function RecipeBrowser() {
-  const [view, setView] = useState<View>("collections");
-  const [sourceSearch, setSourceSearch] = useState("");
-  const [articleSearch, setArticleSearch] = useState("");
-  const [active, setActive] = useState<Source>(collections[2]);
-  const [feed, setFeed] = useState<{
-    path: string;
-    items: FeedItem[];
-    error: string;
-    page: number;
-    hasMore: boolean;
-  }>({
-    path: "",
-    items: [],
-    error: "",
-    page: 0,
-    hasMore: true,
-  });
+  const [tab, setTab] = useState<TabKey>("start");
+  const [shelfId, setShelfId] = useState(DEFAULT_SHELF_ID);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [draft, setDraft] = useState("");
+  const [jump, setJump] = useState("");
+  const [shelfOpen, setShelfOpen] = useState(false);
+  const [feed, setFeed] = useState<Feed>(EMPTY_FEED);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [loadMoreError, setLoadMoreError] = useState("");
+  const [starred, setStarred] = useState<string[]>([]);
+  const [recent, setRecent] = useState<string[]>([]);
 
-  const loading = feed.path !== active.path;
-  const items = loading ? [] : feed.items;
+  const inFlight = useRef(false);
+  const sentinel = useRef<HTMLDivElement | null>(null);
+
+  const shelf = shelfById(shelfId) ?? ALL_SHELVES[0];
+  const searching = Boolean(searchTerm);
+  const feedKey = searching ? `search:${searchTerm}` : `shelf:${shelfId}`;
+  const loading = feed.key !== feedKey;
   const error = loading ? "" : feed.error;
+  const items = useMemo(() => (loading ? [] : feed.items), [loading, feed.items]);
 
-  const currentSources = sourceSets[view];
-  const filteredSources = useMemo(() => {
-    const term = sourceSearch.trim().toLowerCase();
-    if (!term) return currentSources;
-    return currentSources.filter((source) =>
-      `${source.name} ${source.group}`.toLowerCase().includes(term),
-    );
-  }, [currentSources, sourceSearch]);
+  const heading = searching ? `“${searchTerm}”` : shelf.name;
+  const openHref = searching
+    ? `${GUARDIAN}/search?q=${encodeURIComponent(searchTerm)}`
+    : `${GUARDIAN}${shelf.paths[0]}`;
 
-  const filteredItems = useMemo(() => {
-    const term = articleSearch.trim().toLowerCase();
-    if (!term) return items;
-    return items.filter((item) =>
-      `${item.title} ${item.creator} ${item.description} ${item.categories.join(" ")}`
-        .toLowerCase()
-        .includes(term),
-    );
-  }, [items, articleSearch]);
+  // ------------------------------------------------------------- stored state
+
+  useEffect(() => {
+    setStarred(readStore(STARRED_KEY));
+    setRecent(readStore(RECENT_KEY));
+    const params = new URLSearchParams(window.location.search);
+    const wanted = params.get("shelf");
+    if (wanted && shelfById(wanted)) {
+      setShelfId(wanted);
+      setTab(tabOf(wanted));
+    }
+  }, []);
+
+  const toggleStar = useCallback((id: string) => {
+    setStarred((current) => {
+      const next = current.includes(id) ? current.filter((entry) => entry !== id) : [id, ...current];
+      writeStore(STARRED_KEY, next);
+      return next;
+    });
+  }, []);
+
+  const rememberVisit = useCallback((id: string) => {
+    setRecent((current) => {
+      const next = [id, ...current.filter((entry) => entry !== id)].slice(0, RECENT_LIMIT);
+      writeStore(RECENT_KEY, next);
+      return next;
+    });
+  }, []);
+
+  // ------------------------------------------------------------------ loading
+
+  const requestUrl = useCallback(
+    (page: number) =>
+      searching
+        ? `/api/search?q=${encodeURIComponent(searchTerm)}&page=${page}`
+        : `/api/feed?id=${encodeURIComponent(shelfId)}&page=${page}`,
+    [searching, searchTerm, shelfId],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/feed?path=${encodeURIComponent(active.path)}&page=1`, { signal: controller.signal })
+    inFlight.current = false;
+    fetch(requestUrl(1), { signal: controller.signal })
       .then(async (response) => {
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Could not load this feed.");
+        if (!response.ok) throw new Error(data.error || "Could not load this list.");
         return data;
       })
-      .then((data) => setFeed({
-        path: active.path,
-        items: data.items ?? [],
-        error: "",
-        page: data.page ?? 1,
-        hasMore: data.hasMore ?? false,
-      }))
-      .catch((reason) => {
+      .then((data) =>
+        setFeed({
+          key: feedKey,
+          items: data.items ?? [],
+          page: data.page ?? 1,
+          hasMore: data.hasMore ?? false,
+          error: "",
+        }),
+      )
+      .catch((reason: Error) => {
         if (reason.name !== "AbortError") {
-          setFeed({ path: active.path, items: [], error: reason.message, page: 0, hasMore: false });
+          setFeed({ key: feedKey, items: [], page: 0, hasMore: false, error: reason.message });
         }
       });
     return () => controller.abort();
-  }, [active.path]);
+  }, [feedKey, requestUrl]);
 
-  function chooseSource(source: Source) {
-    setArticleSearch("");
-    setLoadMoreError("");
-    setActive(source);
-  }
-
-  async function loadOlder() {
-    const requestedPath = active.path;
-    const nextPage = feed.page + 1;
+  const loadMore = useCallback(async () => {
+    if (inFlight.current || loading || !feed.hasMore || feed.error) return;
+    inFlight.current = true;
     setLoadingMore(true);
-    setLoadMoreError("");
+    const nextPage = feed.page + 1;
     try {
-      const response = await fetch(
-        `/api/feed?path=${encodeURIComponent(requestedPath)}&page=${nextPage}`,
-      );
+      const response = await fetch(requestUrl(nextPage));
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not load older recipes.");
       setFeed((current) => {
-        if (current.path !== requestedPath) return current;
+        if (current.key !== feedKey) return current;
         const links = new Set(current.items.map((item) => item.link));
-        const older = (data.items ?? []).filter((item: FeedItem) => !links.has(item.link));
+        const older = (data.items ?? []).filter((item: Article) => !links.has(item.link));
         return {
           ...current,
           items: [...current.items, ...older],
@@ -204,12 +253,103 @@ export function RecipeBrowser() {
           hasMore: (data.hasMore ?? false) && older.length > 0,
         };
       });
-    } catch (reason) {
-      setLoadMoreError(reason instanceof Error ? reason.message : "Could not load older recipes.");
+    } catch {
+      setFeed((current) => (current.key === feedKey ? { ...current, hasMore: false } : current));
     } finally {
+      inFlight.current = false;
       setLoadingMore(false);
     }
+  }, [feed.error, feed.hasMore, feed.page, feedKey, loading, requestUrl]);
+
+  useEffect(() => {
+    const node = sentinel.current;
+    if (!node || loading || !feed.hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) void loadMore();
+      },
+      { rootMargin: "600px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [feed.hasMore, loadMore, loading]);
+
+  // ----------------------------------------------------------------- shelves
+
+  function chooseShelf(next: Shelf) {
+    setShelfId(next.id);
+    setSearchTerm("");
+    setShelfOpen(false);
+    rememberVisit(next.id);
+    window.history.replaceState(null, "", `?shelf=${encodeURIComponent(next.id)}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
+
+  function changeTab(next: TabKey) {
+    setTab(next);
+    setJump("");
+    setShelfOpen(true);
+  }
+
+  function submitSearch(event: React.FormEvent) {
+    event.preventDefault();
+    const term = draft.trim();
+    if (term.length < 2) return;
+    setSearchTerm(term);
+    setShelfOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  const tabShelves = TAB_SHELVES[tab];
+
+  const visibleShelves = useMemo(() => {
+    const term = jump.trim().toLowerCase();
+    if (!term) return tabShelves;
+    return tabShelves.filter((entry) => `${entry.name} ${entry.group}`.toLowerCase().includes(term));
+  }, [tabShelves, jump]);
+
+  const pinned = useMemo(() => {
+    if (tab !== "writers" || jump.trim()) return [];
+    const inTab = (id: string) => tabShelves.some((entry) => entry.id === id);
+    const starredHere = starred.filter(inTab);
+    const recentHere = recent.filter((id) => inTab(id) && !starredHere.includes(id));
+    const groups: { group: string; shelves: Shelf[] }[] = [];
+    if (starredHere.length) {
+      groups.push({ group: "Starred", shelves: starredHere.map((id) => shelfById(id)!).filter(Boolean) });
+    }
+    if (recentHere.length) {
+      groups.push({ group: "Recently viewed", shelves: recentHere.map((id) => shelfById(id)!).filter(Boolean) });
+    }
+    return groups;
+  }, [tab, jump, tabShelves, starred, recent]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, Shelf[]>();
+    for (const entry of visibleShelves) {
+      const list = map.get(entry.group) ?? [];
+      list.push(entry);
+      map.set(entry.group, list);
+    }
+    return [...map.entries()].map(([group, shelves]) => ({ group, shelves }));
+  }, [visibleShelves]);
+
+  // -------------------------------------------------------------- feed shape
+
+  const weeks = useMemo(() => {
+    if (searching || !shelf.weekly) return null;
+    const map = new Map<string, { label: string; items: Article[] }>();
+    for (const item of items) {
+      const saturday = issueOf(item.published);
+      const key = saturday ? saturday.toISOString().slice(0, 10) : "undated";
+      const label = saturday ? issueLabel(saturday) : "Undated";
+      const bucket = map.get(key) ?? { label, items: [] };
+      bucket.items.push(item);
+      map.set(key, bucket);
+    }
+    return [...map.values()];
+  }, [items, searching, shelf.weekly]);
+
+  const showSearch = tab === "ingredients";
 
   return (
     <main className="site-shell">
@@ -221,157 +361,162 @@ export function RecipeBrowser() {
             <h1>Guardian recipe finder</h1>
           </div>
         </div>
-        <div className="source-tally" aria-label={`${SOURCE_COUNT} verified sources`}>
-          <strong>{SOURCE_COUNT}</strong>
-          <span>verified sources</span>
-        </div>
       </header>
 
-      <section className="workspace" aria-label="Recipe browser">
-        <aside className="source-panel">
-          <div className="panel-intro">
-            <div>
-              <p className="section-kicker">Browse by</p>
-              <h2>Choose a shelf</h2>
-            </div>
-            <SlidersHorizontal aria-hidden="true" />
-          </div>
+      <div className="workspace">
+        <button
+          type="button"
+          className="shelf-toggle"
+          onClick={() => setShelfOpen((open) => !open)}
+          aria-expanded={shelfOpen}
+        >
+          <span>{shelfOpen ? "Close the shelves" : heading}</span>
+          <ChevronDown aria-hidden="true" data-open={shelfOpen} />
+        </button>
 
-          <Tabs
-            value={view}
-            onValueChange={(value) => {
-              const nextView = value as View;
-              setView(nextView);
-              setSourceSearch("");
-              setArticleSearch("");
-              setLoadMoreError("");
-              setActive(sourceSets[nextView][0]);
-            }}
-          >
-            <TabsList className="view-tabs" aria-label="Source type">
-              <TabsTrigger value="collections"><Clock3 />Quick</TabsTrigger>
-              <TabsTrigger value="topics"><UtensilsCrossed />Topics</TabsTrigger>
-              <TabsTrigger value="writers"><ChefHat />Writers</TabsTrigger>
+        <aside className="source-panel" data-open={shelfOpen}>
+          <Tabs value={tab} onValueChange={(value) => changeTab(value as TabKey)}>
+            <TabsList className="view-tabs" aria-label="Browse by">
+              {TABS.map((entry) => (
+                <TabsTrigger key={entry.key} value={entry.key}>{entry.label}</TabsTrigger>
+              ))}
             </TabsList>
           </Tabs>
 
-          <label className="search-field">
-            <span className="sr-only">Search sources</span>
-            <Search aria-hidden="true" />
-            <Input
-              value={sourceSearch}
-              onChange={(event) => setSourceSearch(event.target.value)}
-              placeholder={view === "writers" ? "Find a writer…" : "Find a topic…"}
-            />
-          </label>
+          {showSearch ? (
+            <form className="ingredient-search" onSubmit={submitSearch}>
+              <label className="search-field">
+                <span className="sr-only">Search all Guardian recipes</span>
+                <Search aria-hidden="true" />
+                <Input
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  placeholder="Search all Guardian recipes…"
+                  enterKeyHint="search"
+                />
+              </label>
+              <Button type="submit" disabled={draft.trim().length < 2}>Search</Button>
+              <p>Whatever is in the fridge — cauliflower, anchovies, a glut of courgettes.</p>
+            </form>
+          ) : (
+            <label className="search-field jump-field">
+              <span className="sr-only">Jump to a shelf</span>
+              <Search aria-hidden="true" />
+              <Input
+                value={jump}
+                onChange={(event) => setJump(event.target.value)}
+                placeholder={tab === "writers" ? "Jump to a writer…" : "Jump to a topic…"}
+              />
+            </label>
+          )}
 
-          <ScrollArea className="source-scroll">
-            <SourceList sources={filteredSources} active={active} onSelect={chooseSource} />
-          </ScrollArea>
+          <div className="source-groups">
+            {[...pinned, ...grouped].map(({ group, shelves }) => (
+              <section key={group} className="source-group">
+                <h3>{group}</h3>
+                <div>
+                  {shelves.map((entry) => (
+                    <div className="source-item" key={`${group}-${entry.id}`}>
+                      <button
+                        type="button"
+                        className="source-row"
+                        data-active={!searching && shelf.id === entry.id}
+                        aria-pressed={!searching && shelf.id === entry.id}
+                        onClick={() => chooseShelf(entry)}
+                      >
+                        <span>{entry.name}</span>
+                        <ArrowUpRight aria-hidden="true" />
+                      </button>
+                      {tab === "writers" ? (
+                        <button
+                          type="button"
+                          className="star-button"
+                          data-starred={starred.includes(entry.id)}
+                          aria-label={starred.includes(entry.id) ? `Unstar ${entry.name}` : `Star ${entry.name}`}
+                          aria-pressed={starred.includes(entry.id)}
+                          onClick={() => toggleStar(entry.id)}
+                        >
+                          <Star aria-hidden="true" />
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+            {!visibleShelves.length ? <p className="empty-copy">Nothing matches that. Try a broader word.</p> : null}
+          </div>
         </aside>
 
-        <section className="feed-panel" aria-live="polite">
+        <section className="feed-panel">
           <div className="feed-heading">
             <div>
-              <p className="section-kicker">Latest from</p>
-              <h2>{active.name}</h2>
-              <p className="feed-note">
-                {loading ? "Loading the archive…" : `${items.length} articles loaded · keep loading older pages as far back as you like.`}
+              <p className="section-kicker">{searching ? "Searching for" : "Latest from"}</p>
+              <h2>{heading}</h2>
+              <p className="feed-note" aria-live="polite">
+                {loading
+                  ? "Loading…"
+                  : searching
+                    ? `${items.length} results${feed.hasMore ? ", more as you scroll" : ""}`
+                    : shelf.note ?? `${items.length} articles${feed.hasMore ? ", more as you scroll" : ""}`}
               </p>
             </div>
             <Button asChild variant="outline" className="collection-link">
-              <a href={`${GUARDIAN}${active.path}`} target="_blank" rel="noreferrer">
-                Open collection <ExternalLink />
+              <a href={openHref} target="_blank" rel="noreferrer">
+                Open on the Guardian <ExternalLink />
               </a>
             </Button>
           </div>
 
-          <label className="article-search search-field">
-            <span className="sr-only">Filter these articles</span>
-            <Search aria-hidden="true" />
-            <Input
-              value={articleSearch}
-              onChange={(event) => setArticleSearch(event.target.value)}
-              placeholder="Filter these titles…"
-              disabled={loading || !!error}
-            />
-          </label>
+          {loading ? <ArticleSkeleton /> : null}
 
-          <ScrollArea className="feed-scroll">
-            {loading ? <ArticleSkeleton /> : null}
+          {!loading && error ? (
+            <div className="feed-message">
+              <BookOpenText aria-hidden="true" />
+              <h3>The list is taking a break</h3>
+              <p>{error}</p>
+              <Button asChild>
+                <a href={openHref} target="_blank" rel="noreferrer">
+                  Open on the Guardian <ExternalLink />
+                </a>
+              </Button>
+            </div>
+          ) : null}
 
-            {!loading && error ? (
-              <div className="feed-message">
-                <BookOpenText aria-hidden="true" />
-                <h3>The list is taking a break</h3>
-                <p>{error}</p>
-                <Button asChild>
-                  <a href={`${GUARDIAN}${active.path}`} target="_blank" rel="noreferrer">
-                    Open on the Guardian <ExternalLink />
-                  </a>
-                </Button>
-              </div>
-            ) : null}
+          {!loading && !error && !items.length ? (
+            <div className="feed-message compact">
+              <Search aria-hidden="true" />
+              <h3>Nothing here</h3>
+              <p>{searching ? "No Guardian food articles matched that." : "This shelf came back empty."}</p>
+            </div>
+          ) : null}
 
-            {!loading && !error && !filteredItems.length ? (
-              <div className="feed-message compact">
-                <Search aria-hidden="true" />
-                <h3>No matching titles</h3>
-                <p>Try a shorter or broader phrase.</p>
-              </div>
-            ) : null}
+          {!loading && !error && items.length ? (
+            <div className="article-list">
+              {weeks
+                ? weeks.map((week) => (
+                    <section className="issue" key={week.label}>
+                      <h3 className="issue-heading">The Feast — {week.label}</h3>
+                      {week.items.map((item) => <ArticleRow item={item} key={item.link} />)}
+                    </section>
+                  ))
+                : items.map((item) => <ArticleRow item={item} key={item.link} />)}
 
-            {!loading && !error ? (
-              <div className="article-list">
-                {filteredItems.map((item) => (
-                  <article className="article-row" key={item.link}>
-                    <a className="article-main" href={item.link} target="_blank" rel="noreferrer">
-                      <div className="article-meta">
-                        {item.categories[0] ? <span>{item.categories[0]}</span> : null}
-                        {item.published ? <time>{formatDate(item.published)}</time> : null}
-                      </div>
-                      <h3>{item.title}</h3>
-                      {item.description ? <p>{item.description}</p> : null}
-                      <div className="article-byline">
-                        <span>{item.creator || "The Guardian"}</span>
-                        <span className="read-link">Read on the Guardian <ArrowUpRight /></span>
-                      </div>
-                    </a>
-                    {item.image ? (
-                      <a className="article-image" href={item.link} target="_blank" rel="noreferrer" tabIndex={-1} aria-hidden="true">
-                        {/* RSS images are supplied by the Guardian and link back to the source article. */}
-                        <img src={item.image} alt="" loading="lazy" referrerPolicy="no-referrer" />
-                      </a>
-                    ) : null}
-                  </article>
-                ))}
-                {!articleSearch && (feed.hasMore || loadingMore || loadMoreError) ? (
-                  <div className="load-more-row">
-                    {loadMoreError ? <p>{loadMoreError}</p> : null}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="lg"
-                      onClick={loadOlder}
-                      disabled={loadingMore}
-                    >
-                      {loadingMore ? <LoaderCircle className="spin" /> : <Clock3 />}
-                      {loadingMore ? "Loading older recipes…" : "Load 20 older recipes"}
-                    </Button>
-                    <span>Currently showing {items.length}</span>
-                  </div>
-                ) : null}
-                {!articleSearch && !feed.hasMore && items.length ? (
-                  <p className="archive-end">You’ve reached the end of this Guardian archive.</p>
-                ) : null}
-              </div>
-            ) : null}
-          </ScrollArea>
+              <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />
+
+              {loadingMore ? (
+                <p className="feed-status"><LoaderCircle className="spin" aria-hidden="true" /> Loading more…</p>
+              ) : null}
+              {!feed.hasMore && !loadingMore ? (
+                <p className="feed-status">That is as far back as this list goes.</p>
+              ) : null}
+            </div>
+          ) : null}
         </section>
-      </section>
+      </div>
 
       <footer>
-        <p>Personal-use index · Titles and images come from public Guardian listing pages · Articles always open on the Guardian</p>
+        <p>Personal-use index · Titles and images come from public Guardian pages · Articles always open on the Guardian</p>
         <a href="https://www.theguardian.com/help/terms-of-service" target="_blank" rel="noreferrer">Guardian terms <ArrowUpRight /></a>
       </footer>
     </main>
