@@ -517,7 +517,10 @@ export function RecipeBrowser() {
 
       <footer>
         <p>Personal-use index · Titles and images come from public Guardian pages · Articles always open on the Guardian</p>
-        <a href="https://www.theguardian.com/help/terms-of-service" target="_blank" rel="noreferrer">Guardian terms <ArrowUpRight /></a>
+        <span className="footer-links">
+          <a href="/check">Shelf check</a>
+          <a href="https://www.theguardian.com/help/terms-of-service" target="_blank" rel="noreferrer">Guardian terms <ArrowUpRight /></a>
+        </span>
       </footer>
     </main>
   );

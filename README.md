@@ -34,16 +34,23 @@ Then open `http://localhost:3000`.
 
 ## Checking it still works
 
+Open **`/check`** on the running site (there is a link in the footer). It loads
+every shelf from the Guardian and reports which ones come back empty, with a
+copyable summary of the failures. It needs no terminal, so it works against the
+deployed site from a phone.
+
+This matters because every shelf is a hand-written Guardian tag path, and the
+app narrows most of them to recipes by intersecting with the Guardian's
+`tone/recipes` tag — so the eggs shelf shows egg recipes rather than every
+article ever tagged eggs. If the Guardian retires a tag or changes how those
+intersections work, `/check` reports exactly which shelves broke.
+
+The same checks are available from a terminal:
+
 ```bash
 npm run check:parser    # offline, fast — checks the page parser and date logic
 npm run check:sources   # needs the internet — pings every Guardian path
 ```
-
-`check:sources` is the important one. Every shelf is a hand-written Guardian
-tag path, and the app narrows most of them to recipes by intersecting with the
-Guardian's `tone/recipes` tag (so the eggs shelf shows egg recipes rather than
-every article ever tagged eggs). If the Guardian retires a tag or changes how
-those intersections work, this script reports exactly which shelves broke.
 
 ## Deploy to Netlify
 
