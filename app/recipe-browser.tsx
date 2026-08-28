@@ -6,7 +6,6 @@ import {
   BookOpenText,
   ChevronDown,
   ExternalLink,
-  Feather,
   LoaderCircle,
   Search,
   Star,
@@ -238,7 +237,6 @@ export function RecipeBrowser() {
   const [shelfId, setShelfId] = useState(DEFAULT_SHELF_ID);
   const [searchTerm, setSearchTerm] = useState("");
   const [draft, setDraft] = useState("");
-  const [jump, setJump] = useState("");
   const [shelfOpen, setShelfOpen] = useState(false);
   const [feed, setFeed] = useState<Feed>(EMPTY_FEED);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -419,7 +417,6 @@ export function RecipeBrowser() {
 
   function changeTab(next: TabKey) {
     setTab(next);
-    setJump("");
     // Saved has no shelves to pick, so land straight on the lists. The toggle
     // button stays visible so the other tabs are still reachable on a phone.
     setShelfOpen(next !== "saved");
@@ -445,14 +442,10 @@ export function RecipeBrowser() {
 
   const tabShelves = TAB_SHELVES[tab];
 
-  const visibleShelves = useMemo(() => {
-    const term = jump.trim().toLowerCase();
-    if (!term) return tabShelves;
-    return tabShelves.filter((entry) => `${entry.name} ${entry.group}`.toLowerCase().includes(term));
-  }, [tabShelves, jump]);
+  const visibleShelves = tabShelves;
 
   const pinned = useMemo(() => {
-    if (tab !== "writers" || jump.trim()) return [];
+    if (tab !== "writers") return [];
     const inTab = (id: string) => tabShelves.some((entry) => entry.id === id);
     const starredHere = starred.filter(inTab);
     const recentHere = recent.filter((id) => inTab(id) && !starredHere.includes(id));
@@ -464,7 +457,7 @@ export function RecipeBrowser() {
       groups.push({ group: "Recently viewed", shelves: recentHere.map((id) => shelfById(id)!).filter(Boolean) });
     }
     return groups;
-  }, [tab, jump, tabShelves, starred, recent]);
+  }, [tab, tabShelves, starred, recent]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Shelf[]>();
@@ -498,11 +491,8 @@ export function RecipeBrowser() {
     <main className="site-shell">
       <header className="masthead">
         <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true"><Feather /></div>
-          <div>
-            <p className="eyebrow">A personal cooking index</p>
-            <h1>Guardian recipe finder</h1>
-          </div>
+          <p className="eyebrow">A personal cooking index</p>
+          <h1>Guardian recipe finder</h1>
         </div>
       </header>
 
@@ -513,7 +503,7 @@ export function RecipeBrowser() {
           onClick={() => setShelfOpen((open) => !open)}
           aria-expanded={shelfOpen}
         >
-          <span>{shelfOpen ? "Close the shelves" : heading}</span>
+          <span>{shelfOpen ? "Done" : heading}</span>
           <ChevronDown aria-hidden="true" data-open={shelfOpen} />
         </button>
 
@@ -543,17 +533,7 @@ export function RecipeBrowser() {
               <Button type="submit" disabled={draft.trim().length < 2}>Search</Button>
               <p>Jumps straight to an ingredient. Anything the Guardian doesn’t tag, you’ll be offered on Google.</p>
             </form>
-          ) : (
-            <label className="search-field jump-field">
-              <span className="sr-only">Jump to a shelf</span>
-              <Search aria-hidden="true" />
-              <Input
-                value={jump}
-                onChange={(event) => setJump(event.target.value)}
-                placeholder={tab === "writers" ? "Jump to a writer…" : "Jump to a topic…"}
-              />
-            </label>
-          )}
+          ) : null}
 
           {tab === "saved" ? null : (
           <div className="source-groups">

@@ -28,7 +28,7 @@ export type Shelf = {
 export type TabKey = "start" | "ingredients" | "cuisines" | "writers" | "saved";
 
 export const TABS: { key: TabKey; label: string }[] = [
-  { key: "start", label: "Start here" },
+  { key: "start", label: "Quick" },
   { key: "ingredients", label: "Ingredients" },
   { key: "cuisines", label: "Cuisines" },
   { key: "writers", label: "Writers" },
