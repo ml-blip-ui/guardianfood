@@ -206,6 +206,7 @@ function ArticleRow({
 }) {
   return (
     <article className="article-row">
+      <div className="article-body">
       <a className="article-main" href={item.link} target="_blank" rel="noreferrer">
         <div className="article-meta">
           {item.kicker ? <span>{item.kicker}</span> : null}
@@ -217,6 +218,9 @@ function ArticleRow({
           <span className="read-link">Read on the Guardian <ArrowUpRight /></span>
         </div>
       </a>
+      {/* In the same column as the text, so a short headline leaves no gap. */}
+      <RecipeControls item={item} entry={entry} onWant={onWant} onRate={onRate} onClear={onClear} />
+      </div>
       {item.image ? (
         <a className="article-image" href={item.link} target="_blank" rel="noreferrer" tabIndex={-1} aria-hidden="true">
           {/* Images are served by the Guardian and every one links back to the source article.
@@ -225,8 +229,6 @@ function ArticleRow({
           <img src={item.image} alt="" loading="lazy" referrerPolicy="no-referrer" />
         </a>
       ) : null}
-      {/* Last in the row so the grid keeps headline and image side by side. */}
-      <RecipeControls item={item} entry={entry} onWant={onWant} onRate={onRate} onClear={onClear} />
     </article>
   );
 }
