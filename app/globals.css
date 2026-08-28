@@ -584,3 +584,110 @@ footer svg { width: 12px; }
   .rating-star { width: 34px; height: 34px; }
   .rating-hint { display: none; }
 }
+
+/* =========================================================================
+   /design — a temporary comparison page. Remove with the page itself.
+   ========================================================================= */
+
+.d-page { width: min(900px, 100%); margin: 0 auto; padding: 26px clamp(16px, 4vw, 40px) 60px; }
+.d-page > header { padding-bottom: 26px; border-bottom: 1px solid var(--line); }
+.d-eyebrow { margin: 0 0 6px; color: var(--moss); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+.d-page h1 { margin: 0 0 14px; font-family: Georgia, serif; font-size: clamp(1.9rem, 5vw, 2.6rem); font-weight: 600; letter-spacing: -0.03em; }
+.d-intro { max-width: 60ch; margin: 0 0 12px; color: #4e564f; font-size: 0.95rem; line-height: 1.6; }
+.d-sizes { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 18px; }
+.d-sizes > span { margin-right: 4px; color: var(--quiet); font-size: 0.78rem; font-weight: 700; }
+.d-sizes button {
+  padding: 7px 14px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--paper); color: #3b443e; font-size: 0.8rem; font-weight: 700; cursor: pointer;
+}
+.d-sizes button[data-on="true"] { border-color: var(--forest); background: var(--forest); color: var(--paper); }
+
+.d-variant { padding: 30px 0 10px; border-bottom: 1px solid var(--line); }
+.d-label { margin-bottom: 18px; }
+.d-label h2 { margin: 0; font-family: Georgia, serif; font-size: 1.35rem; font-weight: 600; }
+.d-label p { margin: 4px 0 0; color: var(--quiet); font-size: 0.85rem; }
+
+.d-row { display: grid; gap: clamp(14px, 3vw, 28px); padding: 22px 0; border-top: 1px solid var(--line); }
+.d-rows > .d-row:first-child { border-top: 0; }
+.d-main { min-width: 0; }
+.d-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+.d-meta time { color: var(--quiet); }
+.d-row h3 { margin: 0; }
+.d-row p { margin: 9px 0 0; color: #5c635e; }
+.d-read { display: inline-flex; align-items: center; gap: 4px; margin-top: 10px; color: var(--forest); font-weight: 700; }
+.d-read svg { width: 13px; }
+.d-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-top: 14px; }
+.d-want { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: transparent; color: var(--quiet); cursor: pointer; }
+.d-want svg { width: 14px; }
+.d-want[data-on="true"] { border-color: var(--forest); background: var(--forest); color: var(--paper); }
+.d-want[data-on="true"] svg { fill: currentColor; }
+.d-rating { display: inline-flex; gap: 3px; }
+.d-rating svg { width: 17px; color: #c4bda9; }
+.d-rating svg[data-on="true"] { color: var(--coral); fill: var(--coral); }
+.d-image { overflow: hidden; border-radius: 8px; background: #ded8cb; }
+.d-image img { width: 100%; height: 100%; object-fit: cover; }
+.d-image-empty { background: linear-gradient(140deg, #d7cfb9, #b9c4ac); }
+
+/* Image size, driven by the toggle. */
+.d-variant[data-size="sm"] .d-row { grid-template-columns: minmax(0, 1fr) 110px; }
+.d-variant[data-size="sm"] .d-image { height: 88px; }
+.d-variant[data-size="md"] .d-row { grid-template-columns: minmax(0, 1fr) 180px; }
+.d-variant[data-size="md"] .d-image { height: 140px; }
+.d-variant[data-size="lg"] .d-row { grid-template-columns: minmax(0, 1fr) 260px; }
+.d-variant[data-size="lg"] .d-image { height: 195px; }
+.v-current[data-size="sm"] .d-image { height: 82px; }
+
+/* --- Current: Georgia and Arial, small type, uppercase kickers ----------- */
+.v-current .d-row { font-family: Arial, Helvetica, sans-serif; }
+.v-current .d-kicker { color: var(--coral); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.v-current .d-meta time { font-size: 0.76rem; }
+.v-current .d-row h3 { font-family: Georgia, "Times New Roman", serif; font-size: 1.45rem; font-weight: 600; line-height: 1.08; letter-spacing: -0.02em; }
+.v-current .d-row p { font-family: Georgia, serif; font-size: 0.9rem; line-height: 1.45; }
+.v-current .d-read { font-size: 0.75rem; }
+.v-current .d-want { padding: 7px 12px; border-radius: 999px; font-size: 0.76rem; font-weight: 700; }
+
+/* --- Shared refinements for the three new directions -------------------- */
+.v-warm .d-kicker, .v-editorial .d-kicker, .v-guardian .d-kicker {
+  color: var(--coral); font-size: 0.82rem; font-weight: 600; letter-spacing: 0;
+}
+.v-warm .d-meta time, .v-editorial .d-meta time, .v-guardian .d-meta time { font-size: 0.8rem; opacity: 0.85; }
+.v-warm .d-row p, .v-editorial .d-row p, .v-guardian .d-row p { font-size: 0.95rem; line-height: 1.55; }
+.v-warm .d-read, .v-editorial .d-read, .v-guardian .d-read { font-size: 0.8rem; }
+.v-warm .d-want, .v-editorial .d-want, .v-guardian .d-want {
+  padding: 9px 15px; border-radius: 10px; font-size: 0.82rem; font-weight: 600;
+  box-shadow: 0 1px 2px rgba(31, 45, 36, 0.07);
+}
+
+/* --- A · Warm: Fraunces + Karla ----------------------------------------- */
+.v-warm .d-row { font-family: Karla, system-ui, sans-serif; }
+.v-warm .d-row h3 {
+  font-family: Fraunces, Georgia, serif; font-variation-settings: "SOFT" 40, "WONK" 1;
+  font-size: clamp(1.5rem, 3.4vw, 1.95rem); font-weight: 600; line-height: 1.06; letter-spacing: -0.015em;
+}
+
+/* --- B · Editorial: Source Serif 4 + Inter ------------------------------- */
+.v-editorial .d-row { font-family: Inter, system-ui, sans-serif; }
+.v-editorial .d-row h3 {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: clamp(1.45rem, 3.2vw, 1.85rem); font-weight: 600; line-height: 1.14; letter-spacing: -0.012em;
+}
+
+/* --- C · Guardian-ish: Newsreader + Inter -------------------------------- */
+.v-guardian .d-row { font-family: Inter, system-ui, sans-serif; }
+.v-guardian .d-row h3 {
+  font-family: Newsreader, Georgia, serif;
+  font-size: clamp(1.5rem, 3.4vw, 1.95rem); font-weight: 600; line-height: 1.1; letter-spacing: -0.005em;
+}
+
+.d-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding-top: 26px; color: var(--quiet); font-size: 0.8rem; }
+.d-foot a { color: var(--forest); font-weight: 700; }
+
+@media (max-width: 620px) {
+  .d-variant[data-size="sm"] .d-row { grid-template-columns: minmax(0, 1fr) 96px; }
+  .d-variant[data-size="sm"] .d-image { height: 78px; }
+  .d-variant[data-size="md"] .d-row { grid-template-columns: minmax(0, 1fr) 130px; }
+  .d-variant[data-size="md"] .d-image { height: 104px; }
+  /* Large goes full width on a phone — the most striking option. */
+  .d-variant[data-size="lg"] .d-row { grid-template-columns: minmax(0, 1fr); }
+  .d-variant[data-size="lg"] .d-image { order: -1; height: 210px; }
+}
