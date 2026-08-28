@@ -21,15 +21,18 @@ export type Shelf = {
   weekly?: boolean;
   /** Shown under the shelf name in the feed heading. */
   note?: string;
+  /** Reads from this person's own lists rather than the Guardian. */
+  local?: "want" | "cooked";
 };
 
-export type TabKey = "start" | "ingredients" | "cuisines" | "writers";
+export type TabKey = "start" | "ingredients" | "cuisines" | "writers" | "mine";
 
 export const TABS: { key: TabKey; label: string }[] = [
   { key: "start", label: "Start here" },
   { key: "ingredients", label: "Ingredients" },
   { key: "cuisines", label: "Cuisines" },
   { key: "writers", label: "Writers" },
+  { key: "mine", label: "Mine" },
 ];
 
 /**
@@ -218,11 +221,31 @@ const COLLECTIONS: Shelf[] = [
 
 // ------------------------------------------------------------------- exports
 
+const MINE: Shelf[] = [
+  {
+    id: "my-want",
+    name: "Want to cook",
+    group: "My lists",
+    paths: [],
+    local: "want",
+    note: "Recipes you have bookmarked, most recent first.",
+  },
+  {
+    id: "my-cooked",
+    name: "Cooked",
+    group: "My lists",
+    paths: [],
+    local: "cooked",
+    note: "Everything you have rated, best first.",
+  },
+];
+
 export const TAB_SHELVES: Record<TabKey, Shelf[]> = {
   start: START,
   ingredients: INGREDIENTS,
   cuisines: [...COURSES, ...CUISINES, ...SEASONS],
   writers: [...WRITERS, ...COLLECTIONS],
+  mine: MINE,
 };
 
 export const ALL_SHELVES: Shelf[] = Object.values(TAB_SHELVES).flat();

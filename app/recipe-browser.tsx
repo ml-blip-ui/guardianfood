@@ -10,6 +10,11 @@ import {
   LoaderCircle,
   Search,
   Star,
+  Bookmark,
+  Check,
+  Copy,
+  UserRound,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +30,8 @@ import {
 } from "@/lib/sources";
 import type { Shelf, TabKey } from "@/lib/sources";
 import { googleSiteSearch } from "@/lib/guardian";
+import { MAX_RATING, exportText, sortEntries, useLists } from "@/lib/lists";
+import type { Entry, Recipe } from "@/lib/lists";
 
 const GUARDIAN = "https://www.theguardian.com";
 const STARRED_KEY = "grf.starred";
@@ -119,7 +126,73 @@ function ArticleSkeleton() {
   );
 }
 
-function ArticleRow({ item }: { item: Article }) {
+function RecipeControls({
+  item,
+  entry,
+  onWant,
+  onRate,
+}: {
+  item: Article;
+  entry?: Entry;
+  onWant: (recipe: Recipe) => void;
+  onRate: (recipe: Recipe, rating: number) => void;
+}) {
+  const recipe: Recipe = {
+    url: item.link,
+    title: item.title,
+    image: item.image,
+    published: item.published,
+  };
+  const wanted = entry?.status === "want";
+  const rating = entry?.status === "cooked" ? (entry.rating ?? 0) : 0;
+
+  return (
+    <div className="recipe-controls">
+      <button
+        type="button"
+        className="want-button"
+        data-on={wanted}
+        aria-pressed={wanted}
+        aria-label={wanted ? `Remove ${item.title} from want to cook` : `Want to cook ${item.title}`}
+        onClick={() => onWant(recipe)}
+      >
+        <Bookmark aria-hidden="true" />
+        <span>{wanted ? "Want to cook" : "Want to cook"}</span>
+      </button>
+
+      <div className="rating" role="group" aria-label={`Rate ${item.title} out of ${MAX_RATING}`}>
+        {Array.from({ length: MAX_RATING }, (_, index) => index + 1).map((value) => (
+          <button
+            type="button"
+            key={value}
+            className="rating-star"
+            data-on={value <= rating}
+            aria-label={`${value} out of ${MAX_RATING}`}
+            aria-pressed={value <= rating}
+            onClick={() => onRate(recipe, value)}
+          >
+            <Star aria-hidden="true" />
+          </button>
+        ))}
+        {rating ? <span className="rating-value">Cooked · {rating}/{MAX_RATING}</span> : <span className="rating-hint">Cooked? Rate it</span>}
+      </div>
+    </div>
+  );
+}
+
+function ArticleRow({
+  item,
+  entry,
+  onWant,
+  onRate,
+  canSave,
+}: {
+  item: Article;
+  entry?: Entry;
+  onWant: (recipe: Recipe) => void;
+  onRate: (recipe: Recipe, rating: number) => void;
+  canSave: boolean;
+}) {
   return (
     <article className="article-row">
       <a className="article-main" href={item.link} target="_blank" rel="noreferrer">
@@ -141,6 +214,8 @@ function ArticleRow({ item }: { item: Article }) {
           <img src={item.image} alt="" loading="lazy" referrerPolicy="no-referrer" />
         </a>
       ) : null}
+      {/* Last in the row so the grid keeps headline and image side by side. */}
+      {canSave ? <RecipeControls item={item} entry={entry} onWant={onWant} onRate={onRate} /> : null}
     </article>
   );
 }
@@ -160,17 +235,38 @@ export function RecipeBrowser() {
   const inFlight = useRef(false);
   const sentinel = useRef<HTMLDivElement | null>(null);
 
+  const lists = useLists();
+  const [newPerson, setNewPerson] = useState("");
+  const [exported, setExported] = useState("");
+  const [exportCopied, setExportCopied] = useState(false);
+
   const shelf = shelfById(shelfId) ?? ALL_SHELVES[0];
   const searching = Boolean(searchTerm);
+  const local = !searching ? shelf.local : undefined;
   const feedKey = searching ? `search:${searchTerm}` : `shelf:${shelfId}`;
-  const loading = feed.key !== feedKey;
-  const error = loading ? "" : feed.error;
-  const items = useMemo(() => (loading ? [] : feed.items), [loading, feed.items]);
+  const loading = local ? false : feed.key !== feedKey;
+  const error = local ? "" : loading ? "" : feed.error;
+  const localItems = useMemo<Article[]>(() => {
+    if (!local) return [];
+    return sortEntries(lists.entries, local).map((entry) => ({
+      title: entry.title,
+      link: entry.url,
+      description: "",
+      kicker: entry.status === "cooked" && entry.rating ? `${entry.rating}/${MAX_RATING}` : "",
+      published: entry.published,
+      image: entry.image,
+    }));
+  }, [local, lists.entries]);
+
+  const items = useMemo(
+    () => (local ? localItems : loading ? [] : feed.items),
+    [local, localItems, loading, feed.items],
+  );
 
   const heading = searching ? `“${searchTerm}”` : shelf.name;
   const openHref = searching
     ? `${GUARDIAN}/search?q=${encodeURIComponent(searchTerm)}`
-    : `${GUARDIAN}${shelf.paths[0]}`;
+    : `${GUARDIAN}${shelf.paths[0] ?? ""}`;
 
   // ------------------------------------------------------------- stored state
 
@@ -227,6 +323,7 @@ export function RecipeBrowser() {
   );
 
   useEffect(() => {
+    if (local) return;
     const controller = new AbortController();
     inFlight.current = false;
     fetch(requestUrl(1), { signal: controller.signal })
@@ -252,10 +349,10 @@ export function RecipeBrowser() {
         }
       });
     return () => controller.abort();
-  }, [assertMatches, feedKey, requestUrl]);
+  }, [assertMatches, feedKey, local, requestUrl]);
 
   const loadMore = useCallback(async () => {
-    if (inFlight.current || loading || !feed.hasMore || feed.error) return;
+    if (local || inFlight.current || loading || !feed.hasMore || feed.error) return;
     inFlight.current = true;
     setLoadingMore(true);
     const nextPage = feed.page + 1;
@@ -281,11 +378,11 @@ export function RecipeBrowser() {
       inFlight.current = false;
       setLoadingMore(false);
     }
-  }, [assertMatches, feed.error, feed.hasMore, feed.page, feedKey, loading, requestUrl]);
+  }, [assertMatches, feed.error, feed.hasMore, feed.page, feedKey, loading, local, requestUrl]);
 
   useEffect(() => {
     const node = sentinel.current;
-    if (!node || loading || !feed.hasMore) return;
+    if (!node || local || loading || !feed.hasMore) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) void loadMore();
@@ -294,11 +391,12 @@ export function RecipeBrowser() {
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [feed.hasMore, loadMore, loading]);
+  }, [feed.hasMore, loadMore, loading, local]);
 
   // ----------------------------------------------------------------- shelves
 
   function chooseShelf(next: Shelf) {
+    setExported("");
     setShelfId(next.id);
     setSearchTerm("");
     setShelfOpen(false);
@@ -311,6 +409,15 @@ export function RecipeBrowser() {
     setTab(next);
     setJump("");
     setShelfOpen(true);
+    setExported("");
+    // Move to the new tab's first shelf. Without this, leaving Mine leaves your
+    // own list on screen while the panel beside it offers Guardian shelves.
+    const first = TAB_SHELVES[next][0];
+    if (first && first.id !== shelfId) {
+      setShelfId(first.id);
+      setSearchTerm("");
+      window.history.replaceState(null, "", `?shelf=${encodeURIComponent(first.id)}`);
+    }
   }
 
   function submitSearch(event: React.FormEvent) {
@@ -405,6 +512,50 @@ export function RecipeBrowser() {
             </TabsList>
           </Tabs>
 
+          {tab === "mine" ? (
+            <section className="people">
+              <h3>Who’s cooking?</h3>
+              {lists.people.length ? (
+                <div className="people-row">
+                  {lists.people.map((name) => (
+                    <span className="person-chip" key={name} data-on={name === lists.person}>
+                      <button type="button" onClick={() => lists.choosePerson(name)}>
+                        {name === lists.person ? <Check aria-hidden="true" /> : <UserRound aria-hidden="true" />}
+                        {name}
+                      </button>
+                      <button
+                        type="button"
+                        className="person-remove"
+                        aria-label={`Remove ${name}`}
+                        onClick={() => lists.removePerson(name)}
+                      >
+                        <X aria-hidden="true" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="empty-copy">Add everyone who cooks. Each person keeps their own lists.</p>
+              )}
+              <form
+                className="person-add"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  lists.addPerson(newPerson);
+                  setNewPerson("");
+                }}
+              >
+                <Input
+                  value={newPerson}
+                  onChange={(event) => setNewPerson(event.target.value)}
+                  placeholder="Add a name…"
+                  maxLength={24}
+                />
+                <Button type="submit" variant="outline" disabled={!newPerson.trim()}>Add</Button>
+              </form>
+            </section>
+          ) : null}
+
           {showSearch ? (
             <form className="ingredient-search" onSubmit={submitSearch}>
               <label className="search-field">
@@ -473,7 +624,7 @@ export function RecipeBrowser() {
         <section className="feed-panel">
           <div className="feed-heading">
             <div>
-              <p className="section-kicker">{searching ? "Searching for" : "Latest from"}</p>
+              <p className="section-kicker">{local ? "Your list" : searching ? "Searching for" : "Latest from"}</p>
               <h2>{heading}</h2>
               <p className="feed-note" aria-live="polite">
                 {loading
@@ -483,11 +634,13 @@ export function RecipeBrowser() {
                     : shelf.note ?? `${items.length} articles${feed.hasMore ? ", more as you scroll" : ""}`}
               </p>
             </div>
-            <Button asChild variant="outline" className="collection-link">
-              <a href={openHref} target="_blank" rel="noreferrer">
-                Open on the Guardian <ExternalLink />
-              </a>
-            </Button>
+            {local ? null : (
+              <Button asChild variant="outline" className="collection-link">
+                <a href={openHref} target="_blank" rel="noreferrer">
+                  Open on the Guardian <ExternalLink />
+                </a>
+              </Button>
+            )}
           </div>
 
           {loading ? <ArticleSkeleton /> : null}
@@ -505,7 +658,15 @@ export function RecipeBrowser() {
             </div>
           ) : null}
 
-          {!loading && !error && !items.length ? (
+          {local && !lists.person ? (
+            <div className="feed-message compact">
+              <UserRound aria-hidden="true" />
+              <h3>Add yourself first</h3>
+              <p>Everyone keeps their own lists, so pick a name in the panel to get started.</p>
+            </div>
+          ) : null}
+
+          {!loading && !error && !items.length && !(local && !lists.person) ? (
             <div className="feed-message compact">
               <Search aria-hidden="true" />
               <h3>Nothing here</h3>
@@ -522,9 +683,47 @@ export function RecipeBrowser() {
                   </Button>
                   <p className="feed-tried">Tried: {feed.tried?.join("  ·  ")}</p>
                 </>
+              ) : local === "want" ? (
+                <p>Nothing bookmarked yet. Tap “Want to cook” on any recipe and it lands here.</p>
+              ) : local === "cooked" ? (
+                <p>Nothing rated yet. Give a recipe a score once you have cooked it and it lands here, best first.</p>
               ) : (
                 <p>This shelf came back empty.</p>
               )}
+            </div>
+          ) : null}
+
+          {local && lists.person && items.length ? (
+            <div className="export-row">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setExported(exportText(lists.entries, local, lists.person));
+                  setExportCopied(false);
+                }}
+              >
+                <Copy /> Export as text
+              </Button>
+              {exported ? (
+                <>
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(exported);
+                        setExportCopied(true);
+                        setTimeout(() => setExportCopied(false), 2500);
+                      } catch {
+                        // Clipboard blocked — the box below is the fallback.
+                      }
+                    }}
+                  >
+                    {exportCopied ? "Copied" : "Copy"}
+                  </Button>
+                  <textarea className="export-box" readOnly value={exported} rows={10} />
+                </>
+              ) : null}
             </div>
           ) : null}
 
@@ -534,10 +733,28 @@ export function RecipeBrowser() {
                 ? weeks.map((week) => (
                     <section className="issue" key={week.label}>
                       <h3 className="issue-heading">The Feast — {week.label}</h3>
-                      {week.items.map((item) => <ArticleRow item={item} key={item.link} />)}
+                      {week.items.map((item) => (
+                        <ArticleRow
+                          item={item}
+                          key={item.link}
+                          entry={lists.entryFor(item.link)}
+                          onWant={lists.toggleWant}
+                          onRate={lists.rate}
+                          canSave={Boolean(lists.person)}
+                        />
+                      ))}
                     </section>
                   ))
-                : items.map((item) => <ArticleRow item={item} key={item.link} />)}
+                : items.map((item) => (
+                    <ArticleRow
+                      item={item}
+                      key={item.link}
+                      entry={lists.entryFor(item.link)}
+                      onWant={lists.toggleWant}
+                      onRate={lists.rate}
+                      canSave={Boolean(lists.person)}
+                    />
+                  ))}
 
               <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />
 

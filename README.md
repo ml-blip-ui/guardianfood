@@ -18,8 +18,29 @@ Four shelves along the top:
 - **Writers** — the Guardian's food writers and recipe series. Star the ones
   you read and they pin to the top of the list
 
+- **Mine** — your own want-to-cook and cooked lists
+
 The feed loads more as you scroll. The Feast is grouped into weekly issues
 rather than shown as a flat feed, so it reads the way the print magazine does.
+
+## Your lists
+
+Every recipe carries two controls: a bookmark for **want to cook**, and a
+one-to-five rating that marks it **cooked**. Rating something the same score
+again clears it.
+
+The Mine tab holds both lists. Cooked is sorted best first, so what you most
+enjoyed sits at the top. Either list exports as plain text — title, URL and
+stars — to copy wherever you like.
+
+Several people can share the app: add a name each under "Who's cooking?" and
+tap to switch. Every list and every rating belongs to one person, so nothing
+is shared between them.
+
+Lists currently live in the browser, which means they are per-device and can
+be cleared by the browser. Moving them to Supabase is what makes them durable
+and shared across phone and laptop; the storage layer in `lib/lists.ts` is
+kept behind one interface so that swap does not touch the interface.
 
 ## Run it locally
 

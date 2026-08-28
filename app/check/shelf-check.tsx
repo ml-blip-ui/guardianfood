@@ -37,7 +37,8 @@ function tabLabel(shelf: Shelf) {
 }
 
 function initialRows(): Row[] {
-  return ALL_SHELVES.map((shelf) => ({
+  // Local shelves read from the browser, so there is nothing to check.
+  return ALL_SHELVES.filter((shelf) => !shelf.local).map((shelf) => ({
     shelf,
     tab: tabLabel(shelf),
     state: "waiting",
@@ -64,7 +65,7 @@ export function ShelfCheck() {
     setCopied(false);
     setRunning(true);
 
-    const queue = [...ALL_SHELVES];
+    const queue = ALL_SHELVES.filter((shelf) => !shelf.local);
     async function worker() {
       while (queue.length && !cancelled.current) {
         const shelf = queue.shift();

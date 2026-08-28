@@ -129,7 +129,7 @@ button, input { font: inherit; }
 .feed-panel { min-width: 0; }
 
 .view-tabs { width: 100%; height: 42px !important; padding: 3px; background: #dfd9cd; }
-.view-tabs button { min-width: 0; font-size: 0.76rem; }
+.view-tabs button { min-width: 0; padding-inline: 7px; font-size: 0.72rem; letter-spacing: -0.01em; }
 .view-tabs button[data-state="active"] { background: var(--paper); color: var(--forest); }
 
 .search-field { position: relative; display: block; }
@@ -237,7 +237,7 @@ button, input { font: inherit; }
   display: grid;
   grid-template-columns: minmax(0, 1fr) 150px;
   gap: clamp(18px, 3vw, 36px);
-  min-height: 152px;
+  min-height: 128px;
   padding: 22px 0;
   border-top: 1px solid var(--line);
 }
@@ -369,7 +369,7 @@ footer svg { width: 12px; }
   .masthead { min-height: 76px; }
   .brand-mark { width: 40px; height: 40px; }
   .eyebrow { display: none; }
-  .view-tabs button { padding-inline: 5px; font-size: 0.7rem; }
+  .view-tabs button { padding-inline: 3px; font-size: 0.66rem; }
   .article-row { grid-template-columns: minmax(0, 1fr) 92px; gap: 14px; min-height: 118px; padding: 18px 0; }
   .article-image { width: 92px; height: 82px; align-self: start; }
   .article-main > p { display: none; }
@@ -456,3 +456,128 @@ footer svg { width: 12px; }
 .check-probe { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
 .check-probe .search-field { flex: 1 1 220px; }
 .feed-message .feed-tried { margin-top: 18px; }
+
+/* ------------------------------------------------ want-to-cook & ratings */
+
+.recipe-controls {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+  margin-top: 12px;
+}
+.want-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--quiet);
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.want-button svg { width: 14px; }
+.want-button:hover { border-color: var(--forest); color: var(--forest); }
+.want-button[data-on="true"] { border-color: var(--forest); background: var(--forest); color: var(--paper); }
+.want-button[data-on="true"] svg { fill: currentColor; }
+
+.rating { display: inline-flex; align-items: center; gap: 2px; }
+.rating-star {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #c4bda9;
+  cursor: pointer;
+  transition: color 120ms ease, transform 120ms ease;
+}
+.rating-star svg { width: 17px; }
+.rating-star:hover { color: var(--coral); transform: scale(1.12); }
+.rating-star[data-on="true"] { color: var(--coral); }
+.rating-star[data-on="true"] svg { fill: currentColor; }
+.rating-value, .rating-hint { margin-left: 8px; color: var(--quiet); font-size: 0.72rem; font-weight: 700; }
+.rating-hint { font-weight: 400; }
+
+/* ------------------------------------------------------- household people */
+
+.people { margin-top: 16px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.people h3 {
+  margin: 0 0 9px;
+  color: var(--quiet);
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.people-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.person-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  overflow: hidden;
+}
+.person-chip > button:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 4px 7px 11px;
+  border: 0;
+  background: transparent;
+  color: #3b443e;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.person-chip svg { width: 13px; }
+.person-chip[data-on="true"] { border-color: var(--forest); background: var(--forest); }
+.person-chip[data-on="true"] > button { color: var(--paper); }
+.person-remove {
+  display: grid;
+  place-items: center;
+  padding: 7px 9px 7px 5px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+}
+.person-remove:hover { opacity: 1; }
+.person-chip[data-on="true"] .person-remove { color: var(--paper); }
+.person-add { display: flex; gap: 7px; margin-top: 10px; }
+.person-add input { height: 38px; border-color: var(--line); background: var(--paper); }
+.person-add button { flex: none; border-color: var(--line); color: var(--forest); }
+
+/* -------------------------------------------------------------- exporting */
+
+.export-row { display: flex; flex-wrap: wrap; gap: 9px; margin: 4px 0 14px; }
+.export-row button { border-color: var(--line); }
+.export-box {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.76rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+@media (max-width: 560px) {
+  .recipe-controls { gap: 8px 12px; margin-top: 10px; }
+  .want-button span { font-size: 0.72rem; }
+  .rating-star { width: 34px; height: 34px; }
+  .rating-hint { display: none; }
+}
