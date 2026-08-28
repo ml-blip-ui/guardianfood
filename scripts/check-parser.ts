@@ -9,7 +9,7 @@
  */
 
 import { dateFromUrl, parseListing, slugify, tagCandidates } from "../lib/guardian.ts";
-import { buildQuery, cleanSnippet, cleanTitle, toArticles } from "../lib/google-search.ts";
+import { buildQuery, cleanSnippet, cleanTitle, fromOgTitle, toArticles } from "../lib/google-search.ts";
 
 let failures = 0;
 
@@ -94,7 +94,14 @@ check("at most three paths are ever tried", Math.max(...["cauliflower","eggs","t
 
 console.log("google results become ordinary articles");
 check("strips the masthead from a title", cleanTitle("Roast cauliflower cheese | The Guardian"), "Roast cauliflower cheese");
+// Real result: Google returned "… – recipe | Food - The Guardian".
+check("strips a section sitting before the masthead", cleanTitle("How to turn a cauliflower into ‘risotto’ – recipe | Food - The Guardian"), "How to turn a cauliflower into ‘risotto’ – recipe");
 check("leaves a clean title alone", cleanTitle("Roast cauliflower cheese"), "Roast cauliflower cheese");
+
+// The series after the final pipe is the kicker the app shows above a headline.
+check("splits the series off an og:title", fromOgTitle("Rachel Roddy’s recipe for pasta with cauliflower | A kitchen in Rome"),
+  { title: "Rachel Roddy’s recipe for pasta with cauliflower", kicker: "A kitchen in Rome" });
+check("copes with no series", fromOgTitle("Roast cauliflower cheese"), { title: "Roast cauliflower cheese", kicker: "" });
 check("strips the date stamp from a snippet", cleanSnippet("Aug 1, 2026 ... A whole roasted cauliflower ..."), "A whole roasted cauliflower");
 check("adds 'recipe' to a bare ingredient", buildQuery("cauliflower"), "cauliflower recipe");
 check("does not double it up", buildQuery("cauliflower recipe"), "cauliflower recipe");
@@ -105,6 +112,12 @@ const googleItems = [
     link: "https://www.theguardian.com/food/2026/aug/01/roast-cauliflower-cheese",
     snippet: "Aug 1, 2026 ... A whole roasted cauliflower ...",
     pagemap: { cse_image: [{ src: "https://i.guim.co.uk/img/one.jpg" }] } },
+  // Google truncates long titles; the page's own metadata has the whole one.
+  { title: "Christmas sides: Anna Jones' recipes for garlic cauliflower cheese ...",
+    link: "https://www.theguardian.com/food/2019/dec/20/christmas-sides-anna-jones",
+    snippet: "Dec 20, 2019 ... Confit garlic cauliflower cheese ...",
+    pagemap: { metatags: [{ "og:title": "Christmas sides: Anna Jones’ recipes for garlic cauliflower cheese and the ultimate roast potatoes | The modern cook",
+                            "og:description": "Getting everything perfect and hot all at once can be tricky" }] } },
   // A section front, not an article: no date in the URL, so it is dropped.
   { title: "Food | The Guardian", link: "https://www.theguardian.com/food", snippet: "Food" },
   // Somewhere else entirely: dropped.
@@ -113,11 +126,16 @@ const googleItems = [
   { title: "Roast cauliflower cheese", link: "https://www.theguardian.com/food/2026/aug/01/roast-cauliflower-cheese", snippet: "again" },
 ];
 const mapped = toArticles(googleItems);
-check("keeps only dated Guardian articles", mapped.length, 1);
+check("keeps only dated Guardian articles", mapped.length, 2);
 check("title is cleaned", mapped[0]?.title, "Roast cauliflower cheese");
 check("date comes from the URL, as elsewhere", mapped[0]?.published, "2026-08-01T00:00:00.000Z");
 check("image is picked up when Google supplies one", mapped[0]?.image, "https://i.guim.co.uk/img/one.jpg");
 check("snippet becomes the standfirst", mapped[0]?.description, "A whole roasted cauliflower");
+check("a truncated title is replaced by the full one", mapped[1]?.title,
+  "Christmas sides: Anna Jones’ recipes for garlic cauliflower cheese and the ultimate roast potatoes");
+check("the series becomes the kicker", mapped[1]?.kicker, "The modern cook");
+check("a written standfirst beats a keyword snippet", mapped[1]?.description,
+  "Getting everything perfect and hot all at once can be tricky");
 
 console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
 process.exit(failures ? 1 : 0);

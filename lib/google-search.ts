@@ -34,12 +34,28 @@ export function googleSearchConfigured() {
   return Boolean(process.env.GOOGLE_SEARCH_KEY && process.env.GOOGLE_SEARCH_CX);
 }
 
-/** Google appends the masthead to page titles; the app supplies its own. */
+/**
+ * Guardian page titles arrive with the masthead appended, sometimes with the
+ * section in between: "… – recipe | Food - The Guardian".
+ */
 export function cleanTitle(title: string) {
   return title
-    .replace(/\s*[|–—-]\s*The Guardian\s*$/i, "")
+    .replace(/\s*[|–—-]\s*(?:[\w &']+\s*[-–—]\s*)?The Guardian\s*$/i, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * Google truncates long titles with an ellipsis, but the page's own og:title
+ * carries the whole thing, with the series after a final pipe:
+ * "Anna Jones' recipes for … | The modern cook". Split that into the headline
+ * and the kicker the app shows above it.
+ */
+export function fromOgTitle(ogTitle: string): { title: string; kicker: string } {
+  const cleaned = cleanTitle(ogTitle);
+  const pipe = cleaned.lastIndexOf(" | ");
+  if (pipe === -1) return { title: cleaned, kicker: "" };
+  return { title: cleaned.slice(0, pipe).trim(), kicker: cleaned.slice(pipe + 3).trim() };
 }
 
 /** Snippets arrive with a leading date stamp and ellipses. Strip both. */
@@ -71,14 +87,19 @@ export function toArticles(items: GoogleItem[]): Article[] {
   const articles: Article[] = [];
   for (const item of items) {
     const link = item.link ?? "";
-    const title = cleanTitle(item.title ?? "");
+    const meta = item.pagemap?.metatags?.[0] ?? {};
+    // Prefer the page's own title: Google's is truncated on long headlines.
+    const fromOg = meta["og:title"] ? fromOgTitle(meta["og:title"]) : null;
+    const title = fromOg?.title || cleanTitle(item.title ?? "");
     if (!title || !isGuardianArticle(link) || seen.has(link)) continue;
     seen.add(link);
     articles.push({
       title,
       link,
-      description: cleanSnippet(item.snippet ?? ""),
-      kicker: "",
+      // og:description is a written standfirst; the snippet is a keyword-matched
+      // extract from the middle of the recipe. Prefer the former.
+      description: meta["og:description"]?.trim() || cleanSnippet(item.snippet ?? ""),
+      kicker: fromOg?.kicker ?? "",
       published: dateFromUrl(link),
       image: imageFrom(item),
     });
