@@ -52,8 +52,11 @@ type Feed = {
   hasMore: boolean;
   error: string;
   /** How a search found its results, and what it looked for. */
-  route?: "tag" | "google" | "none";
+  route?: "index" | "tag" | "google" | "none";
   tried?: string[];
+  /** How many recipes the app's own index holds, and how many this query hit. */
+  indexed?: number;
+  found?: number;
 };
 
 const EMPTY_FEED: Feed = { key: "", items: [], page: 0, hasMore: false, error: "" };
@@ -278,9 +281,22 @@ export function RecipeBrowser() {
   );
 
   const heading = searching ? `“${searchTerm}”` : shelf.name;
-  const openHref = searching
-    ? `${GUARDIAN}/search?q=${encodeURIComponent(searchTerm)}`
-    : `${GUARDIAN}${shelf.paths[0] ?? ""}`;
+  // The Guardian's own /search?q= is a 404 since they retired it, so a search
+  // that wants to go wider than this app has to go to Google.
+  const openHref = searching ? googleSiteSearch(searchTerm) : `${GUARDIAN}${shelf.paths[0] ?? ""}`;
+  const openLabel = searching ? "Search the Guardian on Google" : "Open on the Guardian";
+
+  /**
+   * The line under a search heading. An index search knows its true total
+   * before paging, so it can say "48 recipes" rather than counting what has
+   * been scrolled into view so far.
+   */
+  const searchNote = useMemo(() => {
+    if (feed.route === "google") return `${items.length} found via Google`;
+    const total = feed.route === "index" && feed.found ? feed.found : items.length;
+    const more = feed.hasMore ? ", more as you scroll" : "";
+    return `${total} recipe${total === 1 ? "" : "s"}${more}`;
+  }, [feed.route, feed.found, feed.hasMore, items.length]);
 
   // ------------------------------------------------------------- stored state
 
@@ -355,6 +371,8 @@ export function RecipeBrowser() {
           error: "",
           route: data.route,
           tried: data.tried,
+          indexed: data.indexed,
+          found: data.found,
         }),
       )
       .catch((reason: Error) => {
@@ -537,7 +555,7 @@ export function RecipeBrowser() {
                 />
               </label>
               <Button type="submit" disabled={draft.trim().length < 2}>Search</Button>
-              <p>Jumps straight to an ingredient. Anything the Guardian doesn’t tag, you’ll be offered on Google.</p>
+              <p>Searches the app’s own index of Guardian recipes by name. Anything it doesn’t hold, you’ll be offered on Google.</p>
             </form>
           ) : null}
 
@@ -608,14 +626,14 @@ export function RecipeBrowser() {
                 {loading
                   ? "Loading…"
                   : searching
-                    ? `${items.length} ${feed.route === "google" ? "found via Google" : `recipe${items.length === 1 ? "" : "s"}`}${feed.hasMore ? ", more as you scroll" : ""}`
+                    ? searchNote
                     : shelf.note ?? `${items.length} articles${feed.hasMore ? ", more as you scroll" : ""}`}
               </p>
             </div>
             {local ? null : (
               <Button asChild variant="outline" className="collection-link">
                 <a href={openHref} target="_blank" rel="noreferrer">
-                  Open on the Guardian <ExternalLink />
+                  {openLabel} <ExternalLink />
                 </a>
               </Button>
             )}
@@ -630,7 +648,7 @@ export function RecipeBrowser() {
               <p>{error}</p>
               <Button asChild>
                 <a href={openHref} target="_blank" rel="noreferrer">
-                  Open on the Guardian <ExternalLink />
+                  {openLabel} <ExternalLink />
                 </a>
               </Button>
             </div>
@@ -643,15 +661,18 @@ export function RecipeBrowser() {
               {searching ? (
                 <>
                   <p>
-                    The Guardian doesn’t tag “{searchTerm}”, so it can’t be looked up here. It
-                    retired its own search and hands off to Google, which will find it.
+                    {feed.indexed
+                      ? `No recipe in the ${feed.indexed.toLocaleString("en-GB")} indexed here mentions “${searchTerm}”, and the Guardian has no tag for it either. Google searches the full site, including the writing around the recipes.`
+                      : `The Guardian doesn’t tag “${searchTerm}”, so it can’t be looked up here. It retired its own search and hands off to Google, which will find it.`}
                   </p>
                   <Button asChild>
                     <a href={googleSiteSearch(searchTerm)} target="_blank" rel="noreferrer">
                       Search the Guardian on Google <ExternalLink />
                     </a>
                   </Button>
-                  <p className="feed-tried">Tried: {feed.tried?.join("  ·  ")}</p>
+                  {feed.tried?.length ? (
+                    <p className="feed-tried">Tried: {feed.tried.join("  ·  ")}</p>
+                  ) : null}
                 </>
               ) : local === "want" ? (
                 <p>Nothing bookmarked yet. Tap “Want to cook” on any recipe and it lands here.</p>

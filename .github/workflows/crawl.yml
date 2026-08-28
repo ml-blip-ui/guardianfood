@@ -1,0 +1,79 @@
+# Keeps data/recipes.json — the app's own searchable index — up to date.
+#
+# The weekly run reads only the newest few pages, which is all it takes: new
+# recipes appear at the front of /tone/recipes, and rows are merged by path so
+# a top-up adds what is new without touching what is already there.
+#
+# For the first build, or after a long gap, run this by hand from the Actions
+# tab and leave "pages" blank to walk the whole archive.
+#
+# Scheduled runs only ever fire from the repository's default branch, so this
+# file has to be merged there before the Monday schedule does anything.
+
+name: Refresh the recipe index
+
+on:
+  schedule:
+    # Mondays, 06:00 UTC. The Feast lands over the weekend, so Monday morning
+    # catches the week's recipes with one small run.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: 'How many pages to read, or "all" for the whole archive.'
+        required: false
+        default: "3"
+
+permissions:
+  contents: write
+
+# Never let two crawls write the same file at once.
+concurrency:
+  group: recipe-index
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # 22.6+ runs the TypeScript crawler directly. The crawler has no
+          # dependencies, so there is nothing to install.
+          node-version: "22"
+
+      - name: Read the Guardian
+        env:
+          # Through the environment rather than inlined into the command, so a
+          # workflow input cannot become part of the shell line.
+          PAGES: ${{ github.event.inputs.pages }}
+        run: |
+          set -euo pipefail
+          pages="${PAGES:-}"
+          if [ "$pages" = "all" ]; then
+            npm run crawl
+          elif [ -z "$pages" ]; then
+            npm run crawl -- 3
+          elif printf '%s' "$pages" | grep -qE '^[0-9]{1,4}$'; then
+            npm run crawl -- "$pages"
+          else
+            echo "pages must be a number or \"all\", got: $pages" >&2
+            exit 1
+          fi
+
+      - name: Commit any change
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- data/recipes.json; then
+            echo "The index is already current. Nothing to commit."
+            exit 0
+          fi
+          count=$(node -e 'process.stdout.write(String(require("./data/recipes.json").count))')
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/recipes.json
+          git commit -m "Refresh the recipe index ($count recipes)"
+          git push

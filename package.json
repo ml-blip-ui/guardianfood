@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "eslint . --ignore-pattern .next",
     "check:parser": "node --experimental-strip-types scripts/check-parser.ts",
-    "check:sources": "node --experimental-strip-types scripts/check-sources.ts"
+    "check:sources": "node --experimental-strip-types scripts/check-sources.ts",
+    "crawl": "node --experimental-strip-types scripts/crawl.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

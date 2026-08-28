@@ -170,7 +170,7 @@ export async function fetchFeedPage(paths: string[], page: number): Promise<Feed
 
 export type SearchResult = FeedPage & {
   /** What answered this search, and which Guardian tags were tried. */
-  route: "tag" | "google" | "none";
+  route: "index" | "tag" | "google" | "none";
   tried: string[];
 };
 

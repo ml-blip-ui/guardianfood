@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { search } from "@/lib/guardian";
+import { searchRecipes } from "@/lib/recipe-search";
 
 export async function GET(
   _request: Request,
@@ -13,9 +13,9 @@ export async function GET(
     return NextResponse.json({ error: "Try a slightly longer search term." }, { status: 400 });
   }
 
-  const result = await search(query, page);
-  // `route` and `tried` are echoed so a search that finds nothing can say what
-  // it actually looked for, rather than just shrugging.
+  const result = await searchRecipes(query, page);
+  // `route`, `tried` and `indexed` are echoed so a search that finds nothing
+  // can say what it actually looked in, rather than just shrugging.
   return NextResponse.json(
     { ...result, query },
     { headers: { "Cache-Control": "public, s-maxage=900, stale-while-revalidate=3600" } },

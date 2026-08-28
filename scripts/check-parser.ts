@@ -11,6 +11,7 @@
 import { dateFromUrl, parseListing, slugify, tagCandidates } from "../lib/guardian.ts";
 import { buildQuery, cleanSnippet, cleanTitle, fromOgTitle, toArticles } from "../lib/google-search.ts";
 import { exportText, mergeEntries, parseImport } from "../lib/lists.ts";
+import { recipeUrl, searchIndex, stem, type IndexedRecipe } from "../lib/recipe-index.ts";
 
 let failures = 0;
 
@@ -182,6 +183,49 @@ const messy = `  Cauliflower cheese
    https://www.theguardian.com/food/2026/aug/1/cauliflower-cheese   `;
 check("copes with stray whitespace", parseImport(messy).length, 1);
 check("ignores text with no links at all", parseImport("just some notes").length, 0);
+
+
+// --------------------------------------------------------------- recipe index
+
+console.log("stem");
+check("trims a plain plural", stem("walnuts"), "walnut");
+check("trims an -ies plural", stem("anchovies"), "anchov");
+check("trims an -oes plural", stem("tomatoes"), "tomato");
+check("leaves a double s alone", stem("cress"), "cress");
+check("leaves a short word alone", stem("figs"), "fig");
+check("leaves a singular alone", stem("cauliflower"), "cauliflower");
+// The stem does not have to be a real word — it only has to be a prefix that
+// catches both forms. "cheese" must not become "chees" and lose the match.
+check("does not maul a singular ending in -ese", stem("cheese"), "cheese");
+
+const shelf: IndexedRecipe[] = [
+  { p: "/food/2026/aug/01/roast-cauliflower-cheese", t: "Roast cauliflower cheese", d: "A whole cauliflower, roasted.", w: "2026-08-01", i: "" },
+  { p: "/food/2025/dec/20/perfect-roast-turkey", t: "The perfect roast turkey with walnut and sage stuffing", d: "", w: "2025-12-20", i: "" },
+  { p: "/food/2026/mar/02/pasta-with-anchovy", t: "Pasta with cauliflower, onion and anchovy", d: "", w: "2026-03-02", i: "" },
+  { p: "/food/2026/jan/09/pear-and-almond-tart", t: "Pear and almond tart", d: "", w: "2026-01-09", i: "" },
+  { p: "/food/2026/feb/11/asparagus-spears", t: "Griddled asparagus spears", d: "", w: "2026-02-11", i: "" },
+  { p: "/food/2024/may/05/jalapeno-cornbread", t: "Jalapeño cornbread", d: "", w: "2024-05-05", i: "" },
+  { p: "/food/2026/apr/18/midweek-greens", t: "Midweek greens", d: "Uses up the cauliflower in the fridge.", w: "2026-04-18", i: "" },
+];
+
+const hits = (query: string) => searchIndex(shelf, query).map((recipe) => recipe.p);
+
+console.log("searchIndex");
+check("finds the plural in a singular headline", hits("walnuts"), ["/food/2025/dec/20/perfect-roast-turkey"]);
+check("finds the singular in a plural search", hits("anchovies"), ["/food/2026/mar/02/pasta-with-anchovy"]);
+check("finds an untagged ingredient", hits("cauliflower").length, 3);
+check("ranks a headline above a standfirst", hits("cauliflower")[2], "/food/2026/apr/18/midweek-greens");
+check("newest first among equal scores", hits("cauliflower")[0], "/food/2026/aug/01/roast-cauliflower-cheese");
+check("needs every word to match", hits("cauliflower anchovy"), ["/food/2026/mar/02/pasta-with-anchovy"]);
+check("returns nothing when one word misses", hits("cauliflower rhubarb"), []);
+check("matches at a word boundary only", hits("pear"), ["/food/2026/jan/09/pear-and-almond-tart"]);
+check("folds accents", hits("jalapeno"), ["/food/2024/may/05/jalapeno-cornbread"]);
+check("ignores a one-letter query", hits("a"), []);
+check("ignores punctuation-only input", hits("!!"), []);
+check("an empty index simply finds nothing", searchIndex([], "cauliflower"), []);
+
+console.log("recipeUrl");
+check("rebuilds the full Guardian link", recipeUrl(shelf[0]), "https://www.theguardian.com/food/2026/aug/01/roast-cauliflower-cheese");
 
 console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
 process.exit(failures ? 1 : 0);
