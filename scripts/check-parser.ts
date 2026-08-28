@@ -10,6 +10,7 @@
 
 import { dateFromUrl, parseListing, slugify, tagCandidates } from "../lib/guardian.ts";
 import { buildQuery, cleanSnippet, cleanTitle, fromOgTitle, toArticles } from "../lib/google-search.ts";
+import { exportText, mergeEntries, parseImport } from "../lib/lists.ts";
 
 let failures = 0;
 
@@ -136,6 +137,51 @@ check("a truncated title is replaced by the full one", mapped[1]?.title,
 check("the series becomes the kicker", mapped[1]?.kicker, "The modern cook");
 check("a written standfirst beats a keyword snippet", mapped[1]?.description,
   "Getting everything perfect and hot all at once can be tricky");
+
+console.log("moving a list between devices");
+
+// The exact text the Export button produces.
+const cooked = `Have cooked, best first (2)
+
+★★★★★  Roast chicken
+https://www.theguardian.com/food/2026/aug/2/roast-chicken
+★★★☆☆  Lemon pasta
+https://www.theguardian.com/food/2026/aug/3/lemon-pasta`;
+
+const want = `Want to cook (1)
+
+Cauliflower cheese
+https://www.theguardian.com/food/2026/aug/1/cauliflower-cheese`;
+
+const fromCooked = parseImport(cooked);
+check("reads both cooked recipes", fromCooked.length, 2);
+check("keeps the title", fromCooked[0]?.title, "Roast chicken");
+check("keeps the rating", fromCooked[0]?.rating, 5);
+check("counts a partial star row", fromCooked[1]?.rating, 3);
+check("marks them cooked", fromCooked.every((e) => e.status === "cooked"), true);
+
+const fromWant = parseImport(want);
+check("reads the want list", fromWant.length, 1);
+check("no stars means want-to-cook", fromWant[0]?.status, "want");
+check("and no rating", fromWant[0]?.rating, undefined);
+
+// A round trip must survive: export, import, export again.
+const roundTrip = exportText(parseImport(cooked), "cooked");
+check("survives a round trip unchanged", roundTrip, exportText(fromCooked, "cooked"));
+
+// Merging must never clobber a rating already on this device.
+const mine = [{ url: "https://www.theguardian.com/food/2026/aug/2/roast-chicken", title: "Roast chicken", image: "", published: "", status: "cooked" as const, rating: 2, updatedAt: "2026-08-02T00:00:00.000Z" }];
+const merged = mergeEntries(mine, fromCooked);
+check("adds only what is missing", merged.added, 1);
+check("leaves the one already here alone", merged.skipped, 1);
+check("and does not overwrite its rating", merged.merged.find((e) => e.url.endsWith("roast-chicken"))?.rating, 2);
+
+// A hand-mangled paste should still work.
+const messy = `  Cauliflower cheese
+
+   https://www.theguardian.com/food/2026/aug/1/cauliflower-cheese   `;
+check("copes with stray whitespace", parseImport(messy).length, 1);
+check("ignores text with no links at all", parseImport("just some notes").length, 0);
 
 console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
 process.exit(failures ? 1 : 0);

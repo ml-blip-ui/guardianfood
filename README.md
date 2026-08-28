@@ -35,10 +35,17 @@ cooked is sorted best first, so what you most enjoyed sits at the top. Either
 list exports as plain text — stars, title, URL — into a box with a copy
 button, which is more dependable on a phone than a download.
 
-Lists currently live in the browser, which means they are per-device and can
-be cleared by the browser. Moving them to Supabase is what makes them durable
-and shared across phone and laptop; the storage layer in `lib/lists.ts` is
-kept behind one interface so that swap does not touch the UI.
+Lists live in the browser, so each device — and each person — keeps its own.
+**Import** next to Export moves a list between your own devices: export on the
+phone, paste into the laptop. Merging never overwrites: a recipe already saved
+keeps whatever rating it has, and importing the same list twice adds nothing.
+
+The parser is deliberately forgiving. It finds the lines containing web
+addresses and takes the line above each as the title, so a hand-edited or
+partly-mangled paste still works.
+
+Storage sits behind one interface in `lib/lists.ts`, so it can move to a
+database later without the UI changing.
 
 ## Run it locally
 

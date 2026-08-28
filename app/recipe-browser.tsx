@@ -11,6 +11,7 @@ import {
   Star,
   Bookmark,
   Copy,
+  ClipboardPaste,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -249,6 +250,9 @@ export function RecipeBrowser() {
   const lists = useLists();
   const [exported, setExported] = useState("");
   const [exportCopied, setExportCopied] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importDraft, setImportDraft] = useState("");
+  const [importResult, setImportResult] = useState("");
 
   const shelf = shelfById(shelfId) ?? ALL_SHELVES[0];
   const searching = Boolean(searchTerm);
@@ -407,6 +411,8 @@ export function RecipeBrowser() {
 
   function chooseShelf(next: Shelf) {
     setExported("");
+    setImportOpen(false);
+    setImportResult("");
     setShelfId(next.id);
     setSearchTerm("");
     setShelfOpen(false);
@@ -657,17 +663,29 @@ export function RecipeBrowser() {
             </div>
           ) : null}
 
-          {local && items.length ? (
+          {local ? (
             <div className="export-row">
+              {items.length ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setExported(exportText(lists.entries, local));
+                    setExportCopied(false);
+                  }}
+                >
+                  <Copy /> Export as text
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  setExported(exportText(lists.entries, local));
-                  setExportCopied(false);
+                  setImportOpen((open) => !open);
+                  setImportResult("");
                 }}
               >
-                <Copy /> Export as text
+                <ClipboardPaste /> Import
               </Button>
               {exported ? (
                 <>
@@ -686,6 +704,40 @@ export function RecipeBrowser() {
                     {exportCopied ? "Copied" : "Copy"}
                   </Button>
                   <textarea className="export-box" readOnly value={exported} rows={10} />
+                </>
+              ) : null}
+
+              {importOpen ? (
+                <>
+                  <p className="import-help">
+                    Paste a list exported from another device. Anything already saved here keeps its
+                    own rating — nothing is overwritten.
+                  </p>
+                  <textarea
+                    className="export-box"
+                    value={importDraft}
+                    onChange={(event) => setImportDraft(event.target.value)}
+                    placeholder={"Want to cook (2)\n\nCauliflower cheese\nhttps://www.theguardian.com/food/…"}
+                    rows={8}
+                  />
+                  <div className="import-actions">
+                    <Button
+                      type="button"
+                      disabled={!importDraft.trim()}
+                      onClick={() => {
+                        const { added, skipped } = lists.importText(importDraft);
+                        setImportResult(
+                          added || skipped
+                            ? `Added ${added}${skipped ? `, skipped ${skipped} already here` : ""}.`
+                            : "Nothing recognised in that — it needs the lines with web addresses.",
+                        );
+                        if (added) setImportDraft("");
+                      }}
+                    >
+                      Add to my lists
+                    </Button>
+                    {importResult ? <span className="import-result">{importResult}</span> : null}
+                  </div>
                 </>
               ) : null}
             </div>

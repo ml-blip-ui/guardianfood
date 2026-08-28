@@ -98,6 +98,64 @@ export function exportText(entries: Entry[], status: Status) {
   return [heading, "", ...lines].join("\n");
 }
 
+/**
+ * Read a list back from exported text.
+ *
+ * Deliberately forgiving: it looks for a URL line and treats the line above it
+ * as the title, so a hand-edited or partly-mangled paste still works. Leading
+ * stars mean it was cooked and carry the rating; otherwise the heading decides,
+ * defaulting to want-to-cook.
+ */
+export function parseImport(text: string): Entry[] {
+  const lines = text.split(/\r?\n/);
+  const entries: Entry[] = [];
+  const seen = new Set<string>();
+  let headingStatus: Status = "want";
+  const now = new Date().toISOString();
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    if (/^have cooked/i.test(line)) headingStatus = "cooked";
+    else if (/^want to cook/i.test(line)) headingStatus = "want";
+    if (!/^https?:\/\//i.test(line)) continue;
+
+    const url = line.split(/\s/)[0];
+    if (seen.has(url)) continue;
+
+    // Walk back to the nearest non-empty line for the title.
+    let title = "";
+    let stars = 0;
+    for (let j = i - 1; j >= 0 && j > i - 4; j -= 1) {
+      const candidate = lines[j].trim();
+      if (!candidate || /^https?:\/\//i.test(candidate)) continue;
+      const match = candidate.match(/^([★☆]+)?\s*(.*)$/);
+      stars = (match?.[1]?.match(/★/g) ?? []).length;
+      title = (match?.[2] ?? "").trim();
+      break;
+    }
+    if (!title) continue;
+
+    seen.add(url);
+    entries.push({
+      url,
+      title,
+      image: "",
+      published: "",
+      status: stars ? "cooked" : headingStatus,
+      ...(stars ? { rating: Math.min(stars, MAX_RATING) } : {}),
+      updatedAt: now,
+    });
+  }
+  return entries;
+}
+
+/** Merge without clobbering: anything already saved keeps its own rating. */
+export function mergeEntries(existing: Entry[], incoming: Entry[]) {
+  const have = new Set(existing.map((entry) => entry.url));
+  const added = incoming.filter((entry) => !have.has(entry.url));
+  return { merged: [...existing, ...added], added: added.length, skipped: incoming.length - added.length };
+}
+
 export function useLists() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [ready, setReady] = useState(false);
@@ -152,5 +210,15 @@ export function useLists() {
     [entries],
   );
 
-  return { ready, entries, toggleWant, rate, clearEntry, entryFor };
+  /** Bring in a list exported from another device. */
+  const importText = useCallback(
+    (text: string) => {
+      const result = mergeEntries(entries, parseImport(text));
+      if (result.added) save(result.merged);
+      return { added: result.added, skipped: result.skipped };
+    },
+    [entries, save],
+  );
+
+  return { ready, entries, toggleWant, rate, clearEntry, entryFor, importText };
 }

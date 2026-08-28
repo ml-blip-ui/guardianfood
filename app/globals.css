@@ -678,3 +678,7 @@ footer svg { width: 12px; }
   .d-variant[data-size="lg"] .d-row { grid-template-columns: minmax(0, 1fr); }
   .d-variant[data-size="lg"] .d-image { order: -1; height: 210px; }
 }
+.import-help { width: 100%; margin: 4px 0 0; color: var(--quiet); font-size: 0.82rem; line-height: 1.5; }
+.import-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; width: 100%; }
+.import-actions button { background: var(--forest); color: var(--paper); }
+.import-result { color: var(--forest); font-size: 0.82rem; font-weight: 700; }
