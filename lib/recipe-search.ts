@@ -30,6 +30,29 @@ function toArticle(recipe: IndexedRecipe): Article {
   };
 }
 
+/**
+ * What the index actually holds, for the diagnostics page.
+ *
+ * The index is bundled into the build, so this answers the question that
+ * matters after a deploy: did the crawled file make it into what is running,
+ * and how old is it?
+ */
+export function indexStatus() {
+  const { recipes } = index;
+  // Measured rather than read off the ends of the array: the crawler writes
+  // newest first, but a report that quietly lies if that ever changes is worse
+  // than no report at all.
+  const dates = recipes.map((recipe) => recipe.w).filter(Boolean).sort();
+  return {
+    count: index.count,
+    builtAt: index.builtAt,
+    newest: dates[dates.length - 1] ?? "",
+    oldest: dates[0] ?? "",
+    withStandfirst: recipes.filter((recipe) => recipe.d).length,
+    withImage: recipes.filter((recipe) => recipe.i).length,
+  };
+}
+
 export type IndexedSearchResult = SearchResult & {
   /** How many recipes the index holds, so the app can say what it searched. */
   indexed: number;

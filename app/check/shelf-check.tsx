@@ -173,14 +173,8 @@ export function ShelfCheck() {
   }
 
   return (
-    <main className="site-shell check-page">
-      <header className="masthead">
-        <div>
-          <p className="eyebrow">Diagnostics</p>
-          <h1>Shelf check</h1>
-        </div>
-      </header>
-
+    <>
+      <h2 className="check-subhead">Every shelf</h2>
       <p className="check-intro">
         Loads every shelf from the Guardian and reports which ones come back empty. Each shelf
         is one real request, so this takes a couple of minutes. Results are cached for half an
@@ -214,10 +208,11 @@ export function ShelfCheck() {
         </>
       ) : null}
 
-      <h2 className="check-subhead">Search probe</h2>
+      <h2 className="check-subhead">Guardian tag probe</h2>
       <p className="check-intro">
-        Asks the Guardian directly about one ingredient and reports what comes back. Use this when a
-        search finds nothing — it shows whether the tag is missing or the page could not be read.
+        Asks the Guardian directly whether it has a tag for one ingredient, bypassing the index
+        entirely. Use this when a search falls through to Google — it shows whether the tag is
+        missing or the page simply could not be read.
       </p>
       <form className="check-probe" onSubmit={runProbe}>
         <label className="search-field">
@@ -249,7 +244,7 @@ export function ShelfCheck() {
       </form>
       {probeText ? <textarea className="check-report" readOnly value={probeText} rows={18} /> : null}
 
-      <h2 className="check-subhead">Every shelf</h2>
+      <h3 className="check-subhead">Shelf by shelf</h3>
       <ol className="check-list">
         {rows.map((row) => (
           <li key={row.shelf.id} data-state={row.state}>
@@ -272,6 +267,6 @@ export function ShelfCheck() {
           </li>
         ))}
       </ol>
-    </main>
+    </>
   );
 }
