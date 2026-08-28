@@ -203,6 +203,7 @@ button, input { font: inherit; }
 .star-button[data-starred="true"] { color: var(--coral); }
 .star-button[data-starred="true"] svg { fill: currentColor; }
 .empty-copy { color: var(--quiet); font-size: 0.9rem; line-height: 1.5; }
+.panel-note { margin: 16px 0 0; color: var(--quiet); font-size: 0.82rem; line-height: 1.5; }
 
 .feed-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
 .feed-heading h2 {
@@ -507,56 +508,56 @@ footer svg { width: 12px; }
 .rating-value, .rating-hint { margin-left: 8px; color: var(--quiet); font-size: 0.72rem; font-weight: 700; }
 .rating-hint { font-weight: 400; }
 
-/* ------------------------------------------------------- household people */
+/* ------------------------------------------------------------ saved lists */
 
-.people { margin-top: 16px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
-.people h3 {
-  margin: 0 0 9px;
-  color: var(--quiet);
-  font-size: 0.67rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+.saved-toggle {
+  display: inline-flex;
+  gap: 3px;
+  margin-bottom: 20px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #e4dfd2;
 }
-.people-row { display: flex; flex-wrap: wrap; gap: 7px; }
-.person-chip {
+.saved-toggle button {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
+  padding: 9px 15px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #59615a;
+  font-size: 0.83rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.saved-toggle button span {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(31, 76, 57, 0.12);
+  font-size: 0.72rem;
+}
+.saved-toggle button[data-on="true"] { background: var(--paper); color: var(--forest); }
+.saved-toggle button[data-on="true"] span { background: var(--forest); color: var(--paper); }
+
+.rating-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 4px 9px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: var(--paper);
-  overflow: hidden;
-}
-.person-chip > button:first-child {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 4px 7px 11px;
-  border: 0;
   background: transparent;
-  color: #3b443e;
-  font-size: 0.8rem;
+  color: var(--quiet);
+  font-size: 0.7rem;
   font-weight: 700;
   cursor: pointer;
 }
-.person-chip svg { width: 13px; }
-.person-chip[data-on="true"] { border-color: var(--forest); background: var(--forest); }
-.person-chip[data-on="true"] > button { color: var(--paper); }
-.person-remove {
-  display: grid;
-  place-items: center;
-  padding: 7px 9px 7px 5px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  opacity: 0.55;
-  cursor: pointer;
-}
-.person-remove:hover { opacity: 1; }
-.person-chip[data-on="true"] .person-remove { color: var(--paper); }
-.person-add { display: flex; gap: 7px; margin-top: 10px; }
-.person-add input { height: 38px; border-color: var(--line); background: var(--paper); }
-.person-add button { flex: none; border-color: var(--line); color: var(--forest); }
+.rating-clear svg { width: 12px; }
+.rating-clear:hover { border-color: var(--destructive); color: var(--destructive); }
 
 /* -------------------------------------------------------------- exporting */
 
@@ -576,6 +577,8 @@ footer svg { width: 12px; }
 }
 
 @media (max-width: 560px) {
+  .saved-toggle { display: flex; width: 100%; }
+  .saved-toggle button { flex: 1; justify-content: center; padding-inline: 8px; font-size: 0.78rem; }
   .recipe-controls { gap: 8px 12px; margin-top: 10px; }
   .want-button span { font-size: 0.72rem; }
   .rating-star { width: 34px; height: 34px; }

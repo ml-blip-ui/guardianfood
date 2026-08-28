@@ -11,9 +11,7 @@ import {
   Search,
   Star,
   Bookmark,
-  Check,
   Copy,
-  UserRound,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -131,11 +129,13 @@ function RecipeControls({
   entry,
   onWant,
   onRate,
+  onClear,
 }: {
   item: Article;
   entry?: Entry;
   onWant: (recipe: Recipe) => void;
   onRate: (recipe: Recipe, rating: number) => void;
+  onClear: (url: string) => void;
 }) {
   const recipe: Recipe = {
     url: item.link,
@@ -174,7 +174,18 @@ function RecipeControls({
             <Star aria-hidden="true" />
           </button>
         ))}
-        {rating ? <span className="rating-value">Cooked · {rating}/{MAX_RATING}</span> : <span className="rating-hint">Cooked? Rate it</span>}
+        {rating ? (
+          <button
+            type="button"
+            className="rating-clear"
+            aria-label={`Clear the rating on ${item.title}`}
+            onClick={() => onClear(item.link)}
+          >
+            <X aria-hidden="true" /> Clear
+          </button>
+        ) : (
+          <span className="rating-hint">Cooked? Rate it</span>
+        )}
       </div>
     </div>
   );
@@ -185,13 +196,13 @@ function ArticleRow({
   entry,
   onWant,
   onRate,
-  canSave,
+  onClear,
 }: {
   item: Article;
   entry?: Entry;
   onWant: (recipe: Recipe) => void;
   onRate: (recipe: Recipe, rating: number) => void;
-  canSave: boolean;
+  onClear: (url: string) => void;
 }) {
   return (
     <article className="article-row">
@@ -215,7 +226,7 @@ function ArticleRow({
         </a>
       ) : null}
       {/* Last in the row so the grid keeps headline and image side by side. */}
-      {canSave ? <RecipeControls item={item} entry={entry} onWant={onWant} onRate={onRate} /> : null}
+      <RecipeControls item={item} entry={entry} onWant={onWant} onRate={onRate} onClear={onClear} />
     </article>
   );
 }
@@ -236,7 +247,6 @@ export function RecipeBrowser() {
   const sentinel = useRef<HTMLDivElement | null>(null);
 
   const lists = useLists();
-  const [newPerson, setNewPerson] = useState("");
   const [exported, setExported] = useState("");
   const [exportCopied, setExportCopied] = useState(false);
 
@@ -408,7 +418,9 @@ export function RecipeBrowser() {
   function changeTab(next: TabKey) {
     setTab(next);
     setJump("");
-    setShelfOpen(true);
+    // Saved has no shelves to pick, so land straight on the lists. The toggle
+    // button stays visible so the other tabs are still reachable on a phone.
+    setShelfOpen(next !== "saved");
     setExported("");
     // Move to the new tab's first shelf. Without this, leaving Mine leaves your
     // own list on screen while the panel beside it offers Guardian shelves.
@@ -512,51 +524,9 @@ export function RecipeBrowser() {
             </TabsList>
           </Tabs>
 
-          {tab === "mine" ? (
-            <section className="people">
-              <h3>Who’s cooking?</h3>
-              {lists.people.length ? (
-                <div className="people-row">
-                  {lists.people.map((name) => (
-                    <span className="person-chip" key={name} data-on={name === lists.person}>
-                      <button type="button" onClick={() => lists.choosePerson(name)}>
-                        {name === lists.person ? <Check aria-hidden="true" /> : <UserRound aria-hidden="true" />}
-                        {name}
-                      </button>
-                      <button
-                        type="button"
-                        className="person-remove"
-                        aria-label={`Remove ${name}`}
-                        onClick={() => lists.removePerson(name)}
-                      >
-                        <X aria-hidden="true" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="empty-copy">Add everyone who cooks. Each person keeps their own lists.</p>
-              )}
-              <form
-                className="person-add"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  lists.addPerson(newPerson);
-                  setNewPerson("");
-                }}
-              >
-                <Input
-                  value={newPerson}
-                  onChange={(event) => setNewPerson(event.target.value)}
-                  placeholder="Add a name…"
-                  maxLength={24}
-                />
-                <Button type="submit" variant="outline" disabled={!newPerson.trim()}>Add</Button>
-              </form>
-            </section>
-          ) : null}
-
-          {showSearch ? (
+          {tab === "saved" ? (
+            <p className="panel-note">Your two lists are at the top of the page.</p>
+          ) : showSearch ? (
             <form className="ingredient-search" onSubmit={submitSearch}>
               <label className="search-field">
                 <span className="sr-only">Find recipes by ingredient</span>
@@ -583,6 +553,7 @@ export function RecipeBrowser() {
             </label>
           )}
 
+          {tab === "saved" ? null : (
           <div className="source-groups">
             {[...pinned, ...grouped].map(({ group, shelves }) => (
               <section key={group} className="source-group">
@@ -619,9 +590,28 @@ export function RecipeBrowser() {
             ))}
             {!visibleShelves.length ? <p className="empty-copy">Nothing matches that. Try a broader word.</p> : null}
           </div>
+          )}
         </aside>
 
         <section className="feed-panel">
+          {tab === "saved" ? (
+            <div className="saved-toggle" role="tablist" aria-label="Saved lists">
+              {TAB_SHELVES.saved.map((entry) => (
+                <button
+                  type="button"
+                  role="tab"
+                  key={entry.id}
+                  data-on={shelf.id === entry.id}
+                  aria-selected={shelf.id === entry.id}
+                  onClick={() => chooseShelf(entry)}
+                >
+                  {entry.name}
+                  <span>{sortEntries(lists.entries, entry.local!).length}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           <div className="feed-heading">
             <div>
               <p className="section-kicker">{local ? "Your list" : searching ? "Searching for" : "Latest from"}</p>
@@ -658,15 +648,7 @@ export function RecipeBrowser() {
             </div>
           ) : null}
 
-          {local && !lists.person ? (
-            <div className="feed-message compact">
-              <UserRound aria-hidden="true" />
-              <h3>Add yourself first</h3>
-              <p>Everyone keeps their own lists, so pick a name in the panel to get started.</p>
-            </div>
-          ) : null}
-
-          {!loading && !error && !items.length && !(local && !lists.person) ? (
+          {!loading && !error && !items.length ? (
             <div className="feed-message compact">
               <Search aria-hidden="true" />
               <h3>Nothing here</h3>
@@ -693,13 +675,13 @@ export function RecipeBrowser() {
             </div>
           ) : null}
 
-          {local && lists.person && items.length ? (
+          {local && items.length ? (
             <div className="export-row">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  setExported(exportText(lists.entries, local, lists.person));
+                  setExported(exportText(lists.entries, local));
                   setExportCopied(false);
                 }}
               >
@@ -740,7 +722,7 @@ export function RecipeBrowser() {
                           entry={lists.entryFor(item.link)}
                           onWant={lists.toggleWant}
                           onRate={lists.rate}
-                          canSave={Boolean(lists.person)}
+                          onClear={lists.clearEntry}
                         />
                       ))}
                     </section>
@@ -752,7 +734,7 @@ export function RecipeBrowser() {
                       entry={lists.entryFor(item.link)}
                       onWant={lists.toggleWant}
                       onRate={lists.rate}
-                      canSave={Boolean(lists.person)}
+                      onClear={lists.clearEntry}
                     />
                   ))}
 

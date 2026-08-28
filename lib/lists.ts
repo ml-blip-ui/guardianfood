@@ -1,11 +1,10 @@
 "use client";
 
 /**
- * Per-person want-to-cook and cooked lists.
+ * Want-to-cook and cooked lists.
  *
  * Storage sits behind this module so the browser-local implementation here can
- * be swapped for Supabase without the UI changing. Everything is keyed by
- * person: each household profile keeps its own lists and its own ratings.
+ * be swapped for Supabase without the UI changing.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -25,9 +24,9 @@ export type Entry = {
 
 export type Recipe = Pick<Entry, "url" | "title" | "image" | "published">;
 
-const PEOPLE_KEY = "grf.people";
-const CURRENT_KEY = "grf.person";
-const entriesKey = (person: string) => `grf.entries.${person}`;
+const ENTRIES_KEY = "grf.entries";
+const LEGACY_PEOPLE_KEY = "grf.people";
+const LEGACY_CURRENT_KEY = "grf.person";
 
 export const MAX_RATING = 5;
 
@@ -48,7 +47,33 @@ function write(key: string, value: unknown) {
   }
 }
 
-/** Cooked first by rating, best at the top; want-to-cook by most recent. */
+/**
+ * Earlier versions kept a list per named person. Fold any of those into the
+ * single list so nothing saved back then is lost.
+ */
+function migrateFromPeople(): Entry[] {
+  const people = read<string[]>(LEGACY_PEOPLE_KEY, []);
+  if (!people.length) return [];
+  const merged = new Map<string, Entry>();
+  for (const person of people) {
+    for (const entry of read<Entry[]>(`grf.entries.${person}`, [])) {
+      const existing = merged.get(entry.url);
+      if (!existing || entry.updatedAt > existing.updatedAt) merged.set(entry.url, entry);
+    }
+  }
+  const entries = [...merged.values()];
+  if (entries.length) write(ENTRIES_KEY, entries);
+  try {
+    for (const person of people) window.localStorage.removeItem(`grf.entries.${person}`);
+    window.localStorage.removeItem(LEGACY_PEOPLE_KEY);
+    window.localStorage.removeItem(LEGACY_CURRENT_KEY);
+  } catch {
+    // Nothing to do if storage refuses; the merge above already happened.
+  }
+  return entries;
+}
+
+/** Cooked by rating, best at the top; want-to-cook by most recently added. */
 export function sortEntries(entries: Entry[], status: Status) {
   const list = entries.filter((entry) => entry.status === status);
   if (status === "cooked") {
@@ -60,79 +85,33 @@ export function sortEntries(entries: Entry[], status: Status) {
 }
 
 /** Plain text, one recipe per two lines, for pasting anywhere. */
-export function exportText(entries: Entry[], status: Status, person: string) {
+export function exportText(entries: Entry[], status: Status) {
   const list = sortEntries(entries, status);
   const heading =
-    status === "cooked"
-      ? `${person} — cooked, best first (${list.length})`
-      : `${person} — want to cook (${list.length})`;
+    status === "cooked" ? `Have cooked, best first (${list.length})` : `Want to cook (${list.length})`;
   const lines = list.map((entry) => {
-    const stars = entry.rating ? `${"★".repeat(entry.rating)}${"☆".repeat(MAX_RATING - entry.rating)}  ` : "";
+    const stars = entry.rating
+      ? `${"★".repeat(entry.rating)}${"☆".repeat(MAX_RATING - entry.rating)}  `
+      : "";
     return `${stars}${entry.title}\n${entry.url}`;
   });
   return [heading, "", ...lines].join("\n");
 }
 
 export function useLists() {
-  const [people, setPeople] = useState<string[]>([]);
-  const [person, setPerson] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const saved = read<string[]>(PEOPLE_KEY, []);
-    const current = read<string>(CURRENT_KEY, "");
-    const active = saved.includes(current) ? current : (saved[0] ?? "");
-    setPeople(saved);
-    setPerson(active);
-    setEntries(active ? read<Entry[]>(entriesKey(active), []) : []);
+    const saved = read<Entry[]>(ENTRIES_KEY, []);
+    setEntries(saved.length ? saved : migrateFromPeople());
     setReady(true);
   }, []);
 
-  const choosePerson = useCallback((name: string) => {
-    setPerson(name);
-    write(CURRENT_KEY, name);
-    setEntries(read<Entry[]>(entriesKey(name), []));
+  const save = useCallback((next: Entry[]) => {
+    setEntries(next);
+    write(ENTRIES_KEY, next);
   }, []);
-
-  const addPerson = useCallback((rawName: string) => {
-    const name = rawName.trim().slice(0, 24);
-    if (!name) return;
-    setPeople((current) => {
-      if (current.some((entry) => entry.toLowerCase() === name.toLowerCase())) return current;
-      const next = [...current, name];
-      write(PEOPLE_KEY, next);
-      return next;
-    });
-    setPerson((current) => {
-      if (current) return current;
-      write(CURRENT_KEY, name);
-      return name;
-    });
-  }, []);
-
-  const removePerson = useCallback((name: string) => {
-    setPeople((current) => {
-      const next = current.filter((entry) => entry !== name);
-      write(PEOPLE_KEY, next);
-      setPerson((active) => {
-        if (active !== name) return active;
-        const fallback = next[0] ?? "";
-        write(CURRENT_KEY, fallback);
-        setEntries(fallback ? read<Entry[]>(entriesKey(fallback), []) : []);
-        return fallback;
-      });
-      return next;
-    });
-  }, []);
-
-  const save = useCallback(
-    (next: Entry[]) => {
-      setEntries(next);
-      if (person) write(entriesKey(person), next);
-    },
-    [person],
-  );
 
   /** Toggle want-to-cook. Something already cooked keeps its rating. */
   const toggleWant = useCallback(
@@ -143,22 +122,14 @@ export function useLists() {
         return;
       }
       if (existing) return;
-      save([
-        ...entries,
-        { ...recipe, status: "want", updatedAt: new Date().toISOString() },
-      ]);
+      save([...entries, { ...recipe, status: "want", updatedAt: new Date().toISOString() }]);
     },
     [entries, save],
   );
 
-  /** Rate it: that marks it cooked. Rating it the same again clears it. */
+  /** Rating something marks it cooked. */
   const rate = useCallback(
     (recipe: Recipe, rating: number) => {
-      const existing = entries.find((entry) => entry.url === recipe.url);
-      if (existing?.status === "cooked" && existing.rating === rating) {
-        save(entries.filter((entry) => entry.url !== recipe.url));
-        return;
-      }
       const updated: Entry = {
         ...recipe,
         status: "cooked",
@@ -170,21 +141,16 @@ export function useLists() {
     [entries, save],
   );
 
+  /** Take it off both lists — the way back from a mis-tapped star. */
+  const clearEntry = useCallback(
+    (url: string) => save(entries.filter((entry) => entry.url !== url)),
+    [entries, save],
+  );
+
   const entryFor = useCallback(
     (url: string) => entries.find((entry) => entry.url === url),
     [entries],
   );
 
-  return {
-    ready,
-    people,
-    person,
-    entries,
-    choosePerson,
-    addPerson,
-    removePerson,
-    toggleWant,
-    rate,
-    entryFor,
-  };
+  return { ready, entries, toggleWant, rate, clearEntry, entryFor };
 }

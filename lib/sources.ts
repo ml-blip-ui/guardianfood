@@ -25,14 +25,14 @@ export type Shelf = {
   local?: "want" | "cooked";
 };
 
-export type TabKey = "start" | "ingredients" | "cuisines" | "writers" | "mine";
+export type TabKey = "start" | "ingredients" | "cuisines" | "writers" | "saved";
 
 export const TABS: { key: TabKey; label: string }[] = [
   { key: "start", label: "Start here" },
   { key: "ingredients", label: "Ingredients" },
   { key: "cuisines", label: "Cuisines" },
   { key: "writers", label: "Writers" },
-  { key: "mine", label: "Mine" },
+  { key: "saved", label: "Saved" },
 ];
 
 /**
@@ -221,19 +221,19 @@ const COLLECTIONS: Shelf[] = [
 
 // ------------------------------------------------------------------- exports
 
-const MINE: Shelf[] = [
+const SAVED: Shelf[] = [
   {
-    id: "my-want",
+    id: "saved-want",
     name: "Want to cook",
-    group: "My lists",
+    group: "Saved",
     paths: [],
     local: "want",
     note: "Recipes you have bookmarked, most recent first.",
   },
   {
-    id: "my-cooked",
-    name: "Cooked",
-    group: "My lists",
+    id: "saved-cooked",
+    name: "Have cooked",
+    group: "Saved",
     paths: [],
     local: "cooked",
     note: "Everything you have rated, best first.",
@@ -245,7 +245,7 @@ export const TAB_SHELVES: Record<TabKey, Shelf[]> = {
   ingredients: INGREDIENTS,
   cuisines: [...COURSES, ...CUISINES, ...SEASONS],
   writers: [...WRITERS, ...COLLECTIONS],
-  mine: MINE,
+  saved: SAVED,
 };
 
 export const ALL_SHELVES: Shelf[] = Object.values(TAB_SHELVES).flat();
