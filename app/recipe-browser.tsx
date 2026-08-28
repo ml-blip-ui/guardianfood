@@ -51,7 +51,7 @@ type Feed = {
   hasMore: boolean;
   error: string;
   /** How a search found its results, and what it looked for. */
-  route?: "tag" | "none";
+  route?: "tag" | "google" | "none";
   tried?: string[];
 };
 
@@ -602,7 +602,7 @@ export function RecipeBrowser() {
                 {loading
                   ? "Loading…"
                   : searching
-                    ? `${items.length} recipe${items.length === 1 ? "" : "s"}${feed.hasMore ? ", more as you scroll" : ""}`
+                    ? `${items.length} ${feed.route === "google" ? "found via Google" : `recipe${items.length === 1 ? "" : "s"}`}${feed.hasMore ? ", more as you scroll" : ""}`
                     : shelf.note ?? `${items.length} articles${feed.hasMore ? ", more as you scroll" : ""}`}
               </p>
             </div>

@@ -9,6 +9,7 @@
  */
 
 import { dateFromUrl, parseListing, slugify, tagCandidates } from "../lib/guardian.ts";
+import { buildQuery, cleanSnippet, cleanTitle, toArticles } from "../lib/google-search.ts";
 
 let failures = 0;
 
@@ -90,6 +91,33 @@ check("potato tries -es", tagCandidates("potato").includes("potatoes"), true);
 check("the typed word is always tried first", tagCandidates("pasta")[0], "pasta");
 check("an -es plural does not also try a stray -e", tagCandidates("tomatoes"), ["tomatoes", "tomato"]);
 check("at most three paths are ever tried", Math.max(...["cauliflower","eggs","tomatoes","potato","pasta","squash"].map((w) => tagCandidates(w).length)) <= 3, true);
+
+console.log("google results become ordinary articles");
+check("strips the masthead from a title", cleanTitle("Roast cauliflower cheese | The Guardian"), "Roast cauliflower cheese");
+check("leaves a clean title alone", cleanTitle("Roast cauliflower cheese"), "Roast cauliflower cheese");
+check("strips the date stamp from a snippet", cleanSnippet("Aug 1, 2026 ... A whole roasted cauliflower ..."), "A whole roasted cauliflower");
+check("adds 'recipe' to a bare ingredient", buildQuery("cauliflower"), "cauliflower recipe");
+check("does not double it up", buildQuery("cauliflower recipe"), "cauliflower recipe");
+check("respects the plural", buildQuery("cauliflower recipes"), "cauliflower recipes");
+
+const googleItems = [
+  { title: "Roast cauliflower cheese | The Guardian",
+    link: "https://www.theguardian.com/food/2026/aug/01/roast-cauliflower-cheese",
+    snippet: "Aug 1, 2026 ... A whole roasted cauliflower ...",
+    pagemap: { cse_image: [{ src: "https://i.guim.co.uk/img/one.jpg" }] } },
+  // A section front, not an article: no date in the URL, so it is dropped.
+  { title: "Food | The Guardian", link: "https://www.theguardian.com/food", snippet: "Food" },
+  // Somewhere else entirely: dropped.
+  { title: "Cauliflower", link: "https://en.wikipedia.org/wiki/Cauliflower", snippet: "A vegetable" },
+  // The same article twice: kept once.
+  { title: "Roast cauliflower cheese", link: "https://www.theguardian.com/food/2026/aug/01/roast-cauliflower-cheese", snippet: "again" },
+];
+const mapped = toArticles(googleItems);
+check("keeps only dated Guardian articles", mapped.length, 1);
+check("title is cleaned", mapped[0]?.title, "Roast cauliflower cheese");
+check("date comes from the URL, as elsewhere", mapped[0]?.published, "2026-08-01T00:00:00.000Z");
+check("image is picked up when Google supplies one", mapped[0]?.image, "https://i.guim.co.uk/img/one.jpg");
+check("snippet becomes the standfirst", mapped[0]?.description, "A whole roasted cauliflower");
 
 console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
 process.exit(failures ? 1 : 0);

@@ -71,6 +71,31 @@ npm run check:parser    # offline, fast — checks the page parser and date logi
 npm run check:sources   # needs the internet — pings every Guardian path
 ```
 
+## Ingredient search
+
+Searching an ingredient tries a Guardian tag first:
+`/tone/recipes+food/eggs` returns a curated recipe listing, the same mechanism
+the shelves use. Plurals are inconsistent across Guardian tags — eggs and
+tomatoes, but chicken and pasta — so the obvious variants are tried in
+parallel.
+
+The Guardian has no tag for many ingredients (cauliflower among them) and
+retired its own site search in favour of Google. So when no tag matches, the
+search goes to Google's Programmable Search API and the results come back as
+ordinary articles: same layout, same bookmark and rating controls.
+
+This needs two environment variables, both server-side only — the key must
+never reach the browser, so neither is prefixed `NEXT_PUBLIC_`:
+
+| Variable | Where it comes from |
+| --- | --- |
+| `GOOGLE_SEARCH_KEY` | Custom Search JSON API key, Google Cloud console |
+| `GOOGLE_SEARCH_CX` | Search engine ID, programmablesearchengine.google.com |
+
+Without them the app offers a plain Google link instead, which is what it did
+before. The free allowance is 100 searches a day, so results are cached for
+24 hours: repeating a search does not spend another one.
+
 ## Deploy to Netlify
 
 1. Push this repository to GitHub.
@@ -88,8 +113,8 @@ The browser talks to two server-side routes:
 - `/api/feed/<shelf>/<page>` — fetches one or more Guardian listing pages and
   merges them. Shelves are resolved by id against `lib/sources.ts`, so the
   route can only ever fetch paths listed there.
-- `/api/search/<term>/<page>` — passes a search through to the Guardian and
-  keeps the food results.
+- `/api/search/<term>/<page>` — looks the term up as a Guardian tag first, and
+  falls through to Google when the Guardian has no tag for it.
 
 The shelf travels in the path rather than a query string on purpose. When it
 was `?id=…`, Netlify's CDN cached the response against the path alone and

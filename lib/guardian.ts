@@ -7,6 +7,8 @@
  * and simply come back empty if the Guardian changes its markup.
  */
 
+import { googleSearch } from "./google-search.ts";
+
 const GUARDIAN = "https://www.theguardian.com";
 const ARTICLE_PATH = /^(?:\/[a-z0-9-]+){1,3}\/\d{4}\/[a-z]{3}\/\d{1,2}\//i;
 const FETCH_TIMEOUT_MS = 8000;
@@ -167,8 +169,8 @@ export async function fetchFeedPage(paths: string[], page: number): Promise<Feed
  */
 
 export type SearchResult = FeedPage & {
-  /** Whether a Guardian tag answered this, and which paths were tried. */
-  route: "tag" | "none";
+  /** What answered this search, and which Guardian tags were tried. */
+  route: "tag" | "google" | "none";
   tried: string[];
 };
 
@@ -207,6 +209,22 @@ export async function search(query: string, page: number): Promise<SearchResult>
   const fromTag = tagResults.find((result) => result.length > 0);
   if (fromTag) {
     return { items: fromTag, page, hasMore: fromTag.length > 0, route: "tag", tried: tagPaths };
+  }
+
+  // Past page one, an exhausted tag means the end of the results rather than a
+  // reason to start mixing in Google hits. But if page one itself came from
+  // Google, later pages must come from Google too — so only stop here when a
+  // tag actually held something on page one.
+  if (page > 1) {
+    const firstPage = await Promise.all(tagPaths.map((path) => fetchListing(path, 1)));
+    if (firstPage.some((result) => result.length > 0)) {
+      return { items: [], page, hasMore: false, route: "tag", tried: tagPaths };
+    }
+  }
+
+  const fromGoogle = await googleSearch(query, page);
+  if (fromGoogle.length) {
+    return { items: fromGoogle, page, hasMore: fromGoogle.length >= 10, route: "google", tried: tagPaths };
   }
 
   return { items: [], page, hasMore: false, route: "none", tried: tagPaths };
