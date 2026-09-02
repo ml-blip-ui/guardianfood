@@ -283,7 +283,9 @@ export function RecipeBrowser() {
   const heading = searching ? `“${searchTerm}”` : shelf.name;
   // The Guardian's own /search?q= is a 404 since they retired it, so a search
   // that wants to go wider than this app has to go to Google.
-  const openHref = searching ? googleSiteSearch(searchTerm) : `${GUARDIAN}${shelf.paths[0] ?? ""}`;
+  // An index-backed shelf has no Guardian tag of its own, so the food front is
+  // the honest place to send someone who wants to go and browse.
+  const openHref = searching ? googleSiteSearch(searchTerm) : `${GUARDIAN}${shelf.paths[0] ?? "/food"}`;
   const openLabel = searching ? "Search the Guardian on Google" : "Open on the Guardian";
 
   /**

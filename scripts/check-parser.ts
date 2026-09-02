@@ -11,7 +11,8 @@
 import { dateFromUrl, parseListing, slugify, tagCandidates } from "../lib/guardian.ts";
 import { buildQuery, cleanSnippet, cleanTitle, fromOgTitle, toArticles } from "../lib/google-search.ts";
 import { exportText, mergeEntries, parseImport } from "../lib/lists.ts";
-import { recipeUrl, searchIndex, stem, type IndexedRecipe } from "../lib/recipe-index.ts";
+import { recipeUrl, searchAny, searchIndex, stem, type IndexedRecipe } from "../lib/recipe-index.ts";
+import { shelfById } from "../lib/sources.ts";
 
 let failures = 0;
 
@@ -226,6 +227,80 @@ check("an empty index simply finds nothing", searchIndex([], "cauliflower"), [])
 
 console.log("recipeUrl");
 check("rebuilds the full Guardian link", recipeUrl(shelf[0]), "https://www.theguardian.com/food/2026/aug/01/roast-cauliflower-cheese");
+
+
+// ------------------------------------------------- shelves built from search
+
+// The pulses shelf has no Guardian tag behind it, so these titles stand in for
+// the archive: the ones it should gather, and the ones it must leave alone.
+const pulseShelf: IndexedRecipe[] = [
+  { p: "/food/2026/jan/02/lentil-ragu", t: "Lentil ragu", d: "", w: "2026-01-02", i: "" },
+  { p: "/food/2026/jan/03/chickpea-stew", t: "Chickpea and spinach stew", d: "", w: "2026-01-03", i: "" },
+  { p: "/food/2026/jan/04/tarka-dal", t: "Tarka dal", d: "", w: "2026-01-04", i: "" },
+  { p: "/food/2026/jan/05/butter-bean-gratin", t: "Butter bean gratin", d: "", w: "2026-01-05", i: "" },
+  { p: "/food/2026/jan/06/split-pea-soup", t: "Split pea and ham soup", d: "", w: "2026-01-06", i: "" },
+  { p: "/food/2026/jan/07/black-eyed-peas", t: "Black-eyed peas with greens", d: "", w: "2026-01-07", i: "" },
+  { p: "/food/2026/jan/08/falafel", t: "Proper falafel", d: "", w: "2026-01-08", i: "" },
+  { p: "/food/2026/jan/09/hearty-stew", t: "A hearty winter stew", d: "Thickened with cannellini.", w: "2026-01-09", i: "" },
+  // Real Guardian headlines, from the first crawl. The green bean salads are
+  // the reason the exclusion list exists: they were most of the shelf when it
+  // was first run against the archive.
+  { p: "/food/2026/aug/29/mozzarella-green-bean-edamame", t: "Meera Sodha\u2019s recipe for spicy mozzarella, green bean and edamame salad", d: "", w: "2026-08-29", i: "" },
+  { p: "/food/2026/aug/24/black-bean-nachos", t: "Georgina Hayden\u2019s quick and easy recipe for charred corn, jalape\u00f1o and black bean nachos", d: "", w: "2026-08-24", i: "" },
+  { p: "/food/2026/aug/15/black-rice-salad", t: "Meera Sodha\u2019s vegan black rice salad with tomatoes, tamarind and green beans \u2013 recipe", d: "", w: "2026-08-15", i: "" },
+  { p: "/food/2026/aug/05/italian-summer", t: "Angela Hartnett\u2019s Italian summer recipes: grilled peaches, green beans and mozzarella, and gnudi in tomato sauce", d: "", w: "2026-08-05", i: "" },
+  // Must not be gathered.
+  { p: "/food/2026/jan/10/vanilla-ice-cream", t: "Vanilla bean ice cream", d: "", w: "2026-01-10", i: "" },
+  { p: "/food/2026/jan/11/coffee-cake", t: "Coffee bean and walnut cake", d: "", w: "2026-01-11", i: "" },
+  { p: "/food/2026/jan/12/pea-risotto", t: "Garden pea risotto", d: "", w: "2026-01-12", i: "" },
+  { p: "/food/2026/jan/13/roast-chicken", t: "Sunday roast chicken", d: "", w: "2026-01-13", i: "" },
+];
+
+const pulses = shelfById("ingredient-pulses");
+const gathered = searchAny(pulseShelf, pulses?.anyOf ?? [], pulses?.except).map((r) => r.p);
+
+console.log("the pulses shelf");
+check("the shelf exists", Boolean(pulses?.anyOf?.length), true);
+check("has no Guardian tag behind it", pulses?.paths, []);
+check("gathers lentils", gathered.includes("/food/2026/jan/02/lentil-ragu"), true);
+check("gathers chickpeas", gathered.includes("/food/2026/jan/03/chickpea-stew"), true);
+check("gathers dal", gathered.includes("/food/2026/jan/04/tarka-dal"), true);
+check("gathers beans", gathered.includes("/food/2026/jan/05/butter-bean-gratin"), true);
+check("gathers split peas", gathered.includes("/food/2026/jan/06/split-pea-soup"), true);
+check("gathers black-eyed peas", gathered.includes("/food/2026/jan/07/black-eyed-peas"), true);
+check("gathers falafel", gathered.includes("/food/2026/jan/08/falafel"), true);
+check("gathers a pulse named only in the standfirst", gathered.includes("/food/2026/jan/09/hearty-stew"), true);
+// The reason for the exclusion list, and for leaving "pea" out of the terms.
+check("leaves vanilla bean alone", gathered.includes("/food/2026/jan/10/vanilla-ice-cream"), false);
+check("leaves coffee bean alone", gathered.includes("/food/2026/jan/11/coffee-cake"), false);
+check("leaves garden peas alone", gathered.includes("/food/2026/jan/12/pea-risotto"), false);
+check("leaves a roast chicken alone", gathered.includes("/food/2026/jan/13/roast-chicken"), false);
+// A green bean is a pod, not a pulse — but the edamame in the same headline is,
+// so that one stays. This is the case that whole-recipe exclusion would lose.
+check("drops a green bean salad", gathered.includes("/food/2026/aug/15/black-rice-salad"), false);
+check("drops green beans and mozzarella", gathered.includes("/food/2026/aug/05/italian-summer"), false);
+check("keeps green bean AND edamame, on the edamame", gathered.includes("/food/2026/aug/29/mozzarella-green-bean-edamame"), true);
+check("keeps black beans, which are a pulse", gathered.includes("/food/2026/aug/24/black-bean-nachos"), true);
+check("gathers exactly the ten pulse dishes", gathered.length, 10);
+// A headline beats a standfirst here too, so the stew comes last.
+check("ranks headline pulses above a standfirst one", gathered[gathered.length - 1], "/food/2026/jan/09/hearty-stew");
+
+console.log("searchAny");
+check("no terms finds nothing", searchAny(pulseShelf, []), []);
+check("an empty index finds nothing", searchAny([], ["lentil"]), []);
+check("a multi-word term needs both words", searchAny(pulseShelf, ["split pea"]).length, 1);
+// Excluding "green bean" drops the three green-bean titles but leaves butter,
+// black, vanilla and coffee beans, which this call does not exclude.
+check("a blanked phrase stops matching", searchAny(pulseShelf, ["bean"], ["green bean"]).length, 4);
+// The distinction from throwing out the whole recipe: the rest of the headline
+// still counts, so the edamame in a green bean salad is still found.
+check(
+  "but the rest of the recipe still counts",
+  searchAny(pulseShelf, ["bean", "edamame"], ["green bean"]).some((r) => r.p.endsWith("edamame")),
+  true,
+);
+check("exclusions are phrases, not words", searchAny(pulseShelf, ["vanilla"], ["vanilla bean"]).length, 0);
+check("so a term matching elsewhere survives", searchAny(pulseShelf, ["walnut"], ["vanilla bean"]).length, 1);
 
 console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
 process.exit(failures ? 1 : 0);

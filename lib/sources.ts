@@ -23,6 +23,15 @@ export type Shelf = {
   note?: string;
   /** Reads from this person's own lists rather than the Guardian. */
   local?: "want" | "cooked";
+  /**
+   * Built from the app's own recipe index by matching any of these terms,
+   * rather than from a Guardian tag — for the things the Guardian never
+   * tagged. The index is crawled from /tone/recipes, so such a shelf is
+   * recipes-only without needing an intersection. `paths` is empty.
+   */
+  anyOf?: string[];
+  /** Phrases that disqualify a match. A vanilla bean is not a pulse. */
+  except?: string[];
 };
 
 export type TabKey = "start" | "ingredients" | "cuisines" | "writers" | "saved";
@@ -119,6 +128,43 @@ const INGREDIENTS: Shelf[] = [
   group: "In the fridge",
   paths: [food(slug)],
 }));
+
+/**
+ * Pulses has no Guardian tag — not /food/pulses, /food/beans or /food/lentils
+ * — and no single word would cover it anyway. So it is built from the app's
+ * own index instead, matching any of the words a pulse recipe actually puts
+ * in its headline.
+ *
+ * Plurals need no entry: matching is by prefix from a word boundary, so
+ * "lentil" already finds lentils. "pea" is deliberately absent, because
+ * garden peas are not pulses and it would swamp the shelf; "split pea" and
+ * "black-eyed" carry the pulse sense instead.
+ */
+INGREDIENTS.push({
+  id: "ingredient-pulses",
+  name: "Pulses",
+  group: "In the fridge",
+  note: "Beans, lentils, chickpeas and dal.",
+  paths: [],
+  anyOf: [
+    "lentil", "chickpea", "bean", "pulse", "legume",
+    "dal", "dhal", "daal", "chana", "rajma",
+    "cannellini", "borlotti", "butterbean", "flageolet", "haricot",
+    "mung", "adzuki", "aduki", "edamame",
+    "split pea", "black-eyed",
+    "hummus", "houmous", "falafel",
+  ],
+  // Phrases that stop counting as a match. Green, runner and french beans are
+  // pods eaten whole, not pulses, and they turned up as most of the shelf when
+  // it was first run against the real archive. Blanking the phrase rather than
+  // the recipe means a green bean and edamame salad still qualifies, on the
+  // edamame. Broad and fava beans are absent on purpose: those are pulses.
+  except: [
+    "green bean", "runner bean", "french bean", "string bean",
+    "bean sprout", "beansprout",
+    "vanilla bean", "coffee bean", "cocoa bean", "jelly bean", "bean to bar",
+  ],
+});
 
 // --------------------------------------------------- Cuisines & meal courses
 

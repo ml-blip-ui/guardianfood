@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchFeedPage } from "@/lib/guardian";
+import { shelfFromIndex } from "@/lib/recipe-search";
 import { listingPath, shelfById } from "@/lib/sources";
 
 /**
@@ -20,6 +21,28 @@ export async function GET(
   const shelf = shelfById(decodeURIComponent(id));
   if (!shelf || !Number.isInteger(page) || page < 1 || page > 200) {
     return NextResponse.json({ error: "That shelf is not one I know about." }, { status: 400 });
+  }
+
+  // Some shelves are built from our own index because the Guardian never
+  // tagged the thing they are about. Pulses is the first of them.
+  if (shelf.anyOf?.length) {
+    const result = shelfFromIndex(shelf.anyOf, shelf.except, page);
+    if (!result.indexed) {
+      return NextResponse.json(
+        {
+          id: shelf.id,
+          error:
+            "This shelf is built from the app’s own recipe index, which has not been built yet. Run the crawl from the Actions tab, then redeploy.",
+        },
+        { status: 503 },
+      );
+    }
+    // A built index with nothing to say is an ordinary empty shelf, not an
+    // error, so it falls through to the usual empty state.
+    return NextResponse.json(
+      { ...result, id: shelf.id, paths: [] },
+      { headers: { "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=7200" } },
+    );
   }
 
   const paths = shelf.paths.map((path) => listingPath(path, shelf.recipesOnly));

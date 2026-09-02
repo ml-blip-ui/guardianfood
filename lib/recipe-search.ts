@@ -11,7 +11,7 @@
  */
 
 import indexData from "@/data/recipes.json";
-import { searchIndex, recipeUrl, type IndexedRecipe, type RecipeIndex } from "./recipe-index.ts";
+import { searchAny, searchIndex, recipeUrl, type IndexedRecipe, type RecipeIndex } from "./recipe-index.ts";
 import { search as remoteSearch, dateFromUrl, type Article, type SearchResult } from "./guardian.ts";
 
 const index: RecipeIndex = indexData;
@@ -50,6 +50,30 @@ export function indexStatus() {
     oldest: dates[0] ?? "",
     withStandfirst: recipes.filter((recipe) => recipe.d).length,
     withImage: recipes.filter((recipe) => recipe.i).length,
+  };
+}
+
+/**
+ * A shelf whose contents come from the index rather than a Guardian tag.
+ *
+ * `indexed` comes back even when nothing matched, so the caller can tell an
+ * index that holds nothing yet from one that simply has no pulses in it.
+ */
+export function shelfFromIndex(terms: string[], except: string[] | undefined, page: number) {
+  // Newest first, like every other shelf. Relevance ranking is for a search,
+  // where one hit really can beat another; on a shelf every recipe is equally
+  // a pulse recipe, and scoring would only sort by how many words the matching
+  // term happened to have.
+  const matches = [...searchAny(index.recipes, terms, except ?? [])].sort((a, b) =>
+    b.w.localeCompare(a.w),
+  );
+  const start = (page - 1) * PAGE_SIZE;
+  return {
+    items: matches.slice(start, start + PAGE_SIZE).map(toArticle),
+    page,
+    hasMore: matches.length > start + PAGE_SIZE,
+    found: matches.length,
+    indexed: index.count,
   };
 }
 

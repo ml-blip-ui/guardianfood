@@ -18,6 +18,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { CheckCircle2, Copy, LoaderCircle, Play, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ALL_SHELVES } from "@/lib/sources";
+
+/** Shelves built from the index rather than a Guardian tag, so they belong here. */
+const INDEX_SHELVES = ALL_SHELVES.filter((shelf) => shelf.anyOf?.length);
 
 /**
  * Each term earns its place by testing something different. Keep the list
@@ -65,6 +69,28 @@ function initialRows(): Row[] {
   }));
 }
 
+type ShelfRow = {
+  id: string;
+  name: string;
+  terms: number;
+  state: "waiting" | "checking" | "ok" | "empty" | "failed";
+  found: number;
+  first: string;
+  detail: string;
+};
+
+function initialShelfRows(): ShelfRow[] {
+  return INDEX_SHELVES.map((shelf) => ({
+    id: shelf.id,
+    name: shelf.name,
+    terms: shelf.anyOf?.length ?? 0,
+    state: "waiting",
+    found: 0,
+    first: "",
+    detail: "",
+  }));
+}
+
 /** How stale the index is, in words, because a date alone means nothing. */
 function ageOf(builtAt: string) {
   if (!builtAt) return "never built";
@@ -78,6 +104,7 @@ function ageOf(builtAt: string) {
 
 export function SearchCheck() {
   const [rows, setRows] = useState<Row[]>(initialRows);
+  const [shelfRows, setShelfRows] = useState<ShelfRow[]>(initialShelfRows);
   const [status, setStatus] = useState<Status | null>(null);
   const [statusError, setStatusError] = useState("");
   const [running, setRunning] = useState(false);
@@ -88,8 +115,13 @@ export function SearchCheck() {
     setRows((current) => current.map((row) => (row.term === term ? { ...row, ...patch } : row)));
   }, []);
 
+  const updateShelf = useCallback((id: string, patch: Partial<ShelfRow>) => {
+    setShelfRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  }, []);
+
   const run = useCallback(async () => {
     setRows(initialRows());
+    setShelfRows(initialShelfRows());
     setStatus(null);
     setStatusError("");
     setDone(false);
@@ -132,9 +164,33 @@ export function SearchCheck() {
       }
     }
 
+    // The shelves that are built from the index rather than a Guardian tag.
+    for (const shelf of INDEX_SHELVES) {
+      updateShelf(shelf.id, { state: "checking" });
+      try {
+        const response = await fetch(`/api/feed/${encodeURIComponent(shelf.id)}/1`);
+        const data = await response.json();
+        if (!response.ok) {
+          updateShelf(shelf.id, { state: "failed", detail: data.error ?? `HTTP ${response.status}` });
+          continue;
+        }
+        const items = data.items ?? [];
+        updateShelf(shelf.id, {
+          state: items.length ? "ok" : "empty",
+          found: data.found ?? items.length,
+          first: items[0]?.title ?? "",
+        });
+      } catch (reason) {
+        updateShelf(shelf.id, {
+          state: "failed",
+          detail: reason instanceof Error ? reason.message : "request failed",
+        });
+      }
+    }
+
     setRunning(false);
     setDone(true);
-  }, [update]);
+  }, [update, updateShelf]);
 
   const counts = useMemo(() => ({
     ok: rows.filter((r) => r.state === "ok").length,
@@ -179,6 +235,20 @@ export function SearchCheck() {
           ].join("\n")
         : `  unreadable — ${statusError}`,
       "",
+      `INDEX-BUILT SHELVES (${shelfRows.length}):`,
+      ...shelfRows.map((row) => {
+        const body =
+          row.state === "failed"
+            ? `FAILED — ${row.detail}`
+            : row.state === "empty"
+              ? "EMPTY — the index holds nothing matching it"
+              : row.state === "ok"
+                ? `${row.found} recipes`
+                : "not run";
+        const first = row.first ? `\n              top: ${row.first}` : "";
+        return `  ${row.name} (${row.terms} terms) — ${body}${first}`;
+      }),
+      "",
       `PROBES (${counts.ok} as expected, ${counts.wrong} wrong, ${counts.failed} failed):`,
       ...rows.map((row) => {
         const head = `  ${row.state.toUpperCase().padEnd(8)}"${row.term}" — expected ${row.expect}`;
@@ -192,7 +262,7 @@ export function SearchCheck() {
         return `${head}, ${body}${first}\n              (${row.why})`;
       }),
     ].join("\n");
-  }, [done, rows, status, statusError, verdict, counts]);
+  }, [done, rows, shelfRows, status, statusError, verdict, counts]);
 
   async function copyReport() {
     try {
@@ -247,6 +317,36 @@ export function SearchCheck() {
         </>
       ) : null}
 
+      {shelfRows.length ? (
+        <>
+          <h3 className="check-subhead">Shelves built from the index</h3>
+          <ol className="check-list">
+            {shelfRows.map((row) => (
+              <li key={row.id} data-state={row.state === "empty" ? "thin" : row.state}>
+                <span className="check-state" aria-hidden="true">
+                  {row.state === "ok" ? <CheckCircle2 /> : null}
+                  {row.state === "failed" ? <XCircle /> : null}
+                  {row.state === "checking" ? <LoaderCircle className="spin" /> : null}
+                </span>
+                <span className="check-name">
+                  {row.name}
+                  <small>{row.terms} terms</small>
+                </span>
+                <code>{row.first || "—"}</code>
+                <span className="check-result">
+                  {row.state === "waiting" ? "—" : null}
+                  {row.state === "checking" ? "loading" : null}
+                  {row.state === "ok" ? `${row.found} recipes` : null}
+                  {row.state === "empty" ? "empty" : null}
+                  {row.state === "failed" ? row.detail || "failed" : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </>
+      ) : null}
+
+      <h3 className="check-subhead">Searches</h3>
       <ol className="check-list">
         {rows.map((row) => (
           <li key={row.term} data-state={row.state === "wrong" ? "failed" : row.state}>

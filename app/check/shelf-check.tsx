@@ -36,9 +36,15 @@ function tabLabel(shelf: Shelf) {
   return "";
 }
 
+/**
+ * Shelves this check can speak to: the ones backed by a Guardian tag.
+ * Local shelves read from the browser, and index-backed shelves have no tag
+ * to verify — the ingredient search check covers those.
+ */
+const CHECKABLE = ALL_SHELVES.filter((shelf) => !shelf.local && !shelf.anyOf?.length);
+
 function initialRows(): Row[] {
-  // Local shelves read from the browser, so there is nothing to check.
-  return ALL_SHELVES.filter((shelf) => !shelf.local).map((shelf) => ({
+  return CHECKABLE.map((shelf) => ({
     shelf,
     tab: tabLabel(shelf),
     state: "waiting",
@@ -65,7 +71,7 @@ export function ShelfCheck() {
     setCopied(false);
     setRunning(true);
 
-    const queue = ALL_SHELVES.filter((shelf) => !shelf.local);
+    const queue = [...CHECKABLE];
     async function worker() {
       while (queue.length && !cancelled.current) {
         const shelf = queue.shift();
