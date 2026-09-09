@@ -156,6 +156,24 @@ export function ShelfCheck() {
   // --- Search probe --------------------------------------------------------
   // Reports what the Guardian actually returns for an ingredient, so a search
   // that finds nothing can be diagnosed rather than guessed at.
+  const [markup, setMarkup] = useState("");
+  const [markupBusy, setMarkupBusy] = useState(false);
+  const [markupCopied, setMarkupCopied] = useState(false);
+
+  async function runMarkup() {
+    setMarkupBusy(true);
+    setMarkupCopied(false);
+    setMarkup("");
+    try {
+      const response = await fetch("/api/markup", { cache: "no-store" });
+      setMarkup(JSON.stringify(await response.json(), null, 1));
+    } catch (reason) {
+      setMarkup(reason instanceof Error ? reason.message : "The check failed.");
+    } finally {
+      setMarkupBusy(false);
+    }
+  }
+
   const [term, setTerm] = useState("cauliflower");
   const [probing, setProbing] = useState(false);
   const [probeText, setProbeText] = useState("");
@@ -213,6 +231,37 @@ export function ShelfCheck() {
           <textarea className="check-report" readOnly value={report} rows={20} />
         </>
       ) : null}
+
+      <h2 className="check-subhead">Where the images are</h2>
+      <p className="check-intro">
+        Reads one Guardian listing page and reports where each card keeps its picture — before its
+        headline link or after it. The parser assumes after; if it is really before, the wrong
+        photo could be showing. Run this and send the result back.
+      </p>
+      <div className="check-actions">
+        <Button type="button" onClick={runMarkup} disabled={markupBusy}>
+          {markupBusy ? <LoaderCircle className="spin" /> : <Play />}
+          {markupBusy ? "Reading the Guardian…" : "Check the image markup"}
+        </Button>
+        {markup ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(markup);
+                setMarkupCopied(true);
+                setTimeout(() => setMarkupCopied(false), 2500);
+              } catch {
+                // Clipboard blocked — the box below is the fallback.
+              }
+            }}
+          >
+            <Copy /> {markupCopied ? "Copied" : "Copy"}
+          </Button>
+        ) : null}
+      </div>
+      {markup ? <textarea className="check-report" readOnly value={markup} rows={20} /> : null}
 
       <h2 className="check-subhead">Guardian tag probe</h2>
       <p className="check-intro">
