@@ -22,10 +22,19 @@ const SOURCE = "/tone/recipes";
 const OUT = "data/recipes.json";
 /** Be a polite guest: one page at a time, with a pause between. */
 const PAUSE_MS = 400;
-/** A stop, not a target — the loop ends when pages come back empty. */
-const MAX_PAGES = 900;
+/** A safety net, not a target — the loop ends when the archive runs out. */
+const MAX_PAGES = 1500;
 /** Two empty pages in a row means the end, rather than one odd blank. */
 const EMPTY_RUN_TO_STOP = 2;
+/**
+ * Past the last page the Guardian does not return an empty page — it clamps
+ * and serves content again — so running out looks like pages that are full but
+ * hold nothing we have not already seen. Three in a row is the real end.
+ *
+ * Three rather than two so an incremental top-up cannot trip it early: the
+ * whole point of a top-up is that most of what it reads is already known.
+ */
+const NO_NEW_RUN_TO_STOP = 3;
 
 async function fetchPage(page: number) {
   const url = `${GUARDIAN}${SOURCE}?page=${page}`;
@@ -53,6 +62,7 @@ console.log(`Reading ${GUARDIAN}${SOURCE}, up to ${pageLimit} pages.\n`);
 
 let added = 0;
 let empties = 0;
+let nothingNew = 0;
 let lastPage = 0;
 
 for (let page = 1; page <= pageLimit; page += 1) {
@@ -75,6 +85,7 @@ for (let page = 1; page <= pageLimit; page += 1) {
   empties = 0;
   lastPage = page;
 
+  let newHere = 0;
   for (const item of items) {
     const path = item.link.replace(GUARDIAN, "");
     const published = dateFromUrl(path).slice(0, 10);
@@ -87,6 +98,13 @@ for (let page = 1; page <= pageLimit; page += 1) {
       i: item.image,
     });
     added += 1;
+    newHere += 1;
+  }
+
+  nothingNew = newHere ? 0 : nothingNew + 1;
+  if (nothingNew >= NO_NEW_RUN_TO_STOP) {
+    console.log(`\n\nNothing new for ${NO_NEW_RUN_TO_STOP} pages, ending at ${page}.`);
+    break;
   }
 
   if (page % 10 === 0 || page === 1) {
