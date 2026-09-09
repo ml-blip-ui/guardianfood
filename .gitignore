@@ -43,3 +43,6 @@ next-env.d.ts
 
 # typescript build cache
 *.tsbuildinfo
+
+# Throwaway crawl harnesses used to test against stubbed Guardian markup.
+scripts/.tmp-*

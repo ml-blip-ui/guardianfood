@@ -28,13 +28,15 @@ const MAX_PAGES = 1500;
 const EMPTY_RUN_TO_STOP = 2;
 /**
  * Past the last page the Guardian does not return an empty page — it clamps
- * and serves content again — so running out looks like pages that are full but
- * hold nothing we have not already seen. Three in a row is the real end.
+ * and serves the final page over and over. So the end of the archive is a page
+ * whose contents are identical to the one before it.
  *
- * Three rather than two so an incremental top-up cannot trip it early: the
- * whole point of a top-up is that most of what it reads is already known.
+ * This deliberately asks whether the page repeated, not whether it held
+ * anything new. Those are different questions, and answering the wrong one
+ * stops a re-crawl after three pages: a run that exists to fill in missing
+ * images finds nothing new anywhere, by definition, and must still be free to
+ * walk the whole archive.
  */
-const NO_NEW_RUN_TO_STOP = 3;
 
 async function fetchPage(page: number) {
   const url = `${GUARDIAN}${SOURCE}?page=${page}`;
@@ -61,9 +63,10 @@ console.log(existing.length ? `Starting from ${existing.length} known recipes.` 
 console.log(`Reading ${GUARDIAN}${SOURCE}, up to ${pageLimit} pages.\n`);
 
 let added = 0;
+let filled = 0;
 let empties = 0;
-let nothingNew = 0;
 let lastPage = 0;
+let previousPage = "";
 
 for (let page = 1; page <= pageLimit; page += 1) {
   let items;
@@ -83,13 +86,33 @@ for (let page = 1; page <= pageLimit; page += 1) {
     continue;
   }
   empties = 0;
+
+  const fingerprint = items.map((item) => item.link).join("|");
+  if (fingerprint === previousPage) {
+    console.log(`\n\nPage ${page} repeats page ${page - 1}. That is the end of the archive.`);
+    break;
+  }
+  previousPage = fingerprint;
   lastPage = page;
 
-  let newHere = 0;
   for (const item of items) {
     const path = item.link.replace(GUARDIAN, "");
     const published = dateFromUrl(path).slice(0, 10);
-    if (!published || byPath.has(path)) continue;
+    if (!published) continue;
+
+    const known = byPath.get(path);
+    if (known) {
+      // Only ever fills a gap. A recipe indexed before the parser could read
+      // <picture> markup has no image, and re-reading the page is the one
+      // chance to give it one — but a row that already has an image is left
+      // exactly as it is, so a re-crawl cannot churn the file.
+      if (!known.i && item.image) {
+        known.i = item.image;
+        filled += 1;
+      }
+      continue;
+    }
+
     byPath.set(path, {
       p: path,
       t: item.title,
@@ -98,13 +121,6 @@ for (let page = 1; page <= pageLimit; page += 1) {
       i: item.image,
     });
     added += 1;
-    newHere += 1;
-  }
-
-  nothingNew = newHere ? 0 : nothingNew + 1;
-  if (nothingNew >= NO_NEW_RUN_TO_STOP) {
-    console.log(`\n\nNothing new for ${NO_NEW_RUN_TO_STOP} pages, ending at ${page}.`);
-    break;
   }
 
   if (page % 10 === 0 || page === 1) {
@@ -128,7 +144,7 @@ const withStandfirst = recipes.filter((recipe) => recipe.d).length;
 const withImage = recipes.filter((recipe) => recipe.i).length;
 
 console.log(`\n\nWrote ${OUT}`);
-console.log(`  ${recipes.length} recipes (${added} new this run), read to page ${lastPage}`);
+console.log(`  ${recipes.length} recipes (${added} new this run${filled ? `, ${filled} images filled in` : ""}), read to page ${lastPage}`);
 console.log(`  ${(bytes / 1024).toFixed(0)} KB · ${withStandfirst} with a standfirst · ${withImage} with an image`);
 if (recipes.length) {
   console.log(`  oldest ${recipes[recipes.length - 1].w} · newest ${recipes[0].w}`);

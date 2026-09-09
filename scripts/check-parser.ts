@@ -302,5 +302,53 @@ check(
 check("exclusions are phrases, not words", searchAny(pulseShelf, ["vanilla"], ["vanilla bean"]).length, 0);
 check("so a term matching elsewhere survives", searchAny(pulseShelf, ["walnut"], ["vanilla bean"]).length, 1);
 
+
+// ------------------------------------------------------------- card pictures
+
+// The shape a real Guardian listing page uses: a <picture> of several <source>
+// renditions and, on some cards but not most, an <img> as well. Taken from
+// /tone/recipes, which carried 324 source tags against 56 img tags.
+const pictureFixture = `
+<html><body>
+  <a href="/food/2026/sep/09/tahini-panzanella" aria-label="Tahini panzanella">
+    <picture>
+      <source srcset="https://i.guim.co.uk/img/media/9a54/master/1324.jpg?width=460&amp;dpr=2&amp;s=none 2x" />
+      <source srcset="https://i.guim.co.uk/img/media/9a54/master/1324.jpg?width=460&amp;dpr=1&amp;s=none" />
+      <source srcset="https://i.guim.co.uk/img/media/9a54/master/1324.jpg?width=220&amp;dpr=1&amp;s=none" />
+    </picture>
+  </a>
+  <a href="/food/2026/sep/08/grilled-sardines" aria-label="Grilled sardines">
+    <picture>
+      <source srcset="https://i.guim.co.uk/img/media/53e4/master/4534.jpg?width=220&amp;dpr=2&amp;s=none" />
+      <img src="https://i.guim.co.uk/img/media/53e4/master/4534.jpg?width=120&amp;dpr=1&amp;s=none" />
+    </picture>
+  </a>
+  <a href="/food/2026/sep/07/no-picture-here" aria-label="A recipe with no picture at all"></a>
+</body></html>`;
+
+const pictured = parseListing(pictureFixture);
+
+console.log("card pictures");
+check("still finds every card", pictured.length, 3);
+// The whole point: a card with only <source> tags used to come back blank.
+check(
+  "reads a picture that has no img tag",
+  pictured[0]?.image,
+  "https://i.guim.co.uk/img/media/9a54/master/1324.jpg?width=220&dpr=1&s=none",
+);
+// 460x2 is 920 real pixels, 220x1 is 220. The smallest wins for a list.
+check("prefers the smallest rendition", pictured[0]?.image.includes("width=220"), true);
+check("decodes the entities in the URL", pictured[0]?.image.includes("&amp;"), false);
+// An img at width=120 beats a source at 220x2, so the old behaviour is kept
+// wherever it already worked.
+check(
+  "still prefers a small img tag when there is one",
+  pictured[1]?.image,
+  "https://i.guim.co.uk/img/media/53e4/master/4534.jpg?width=120&dpr=1&s=none",
+);
+check("a card with no picture stays empty", pictured[2]?.image, "");
+// The srcset "url 2x" form must not leak its descriptor into the URL.
+check("never keeps the srcset descriptor", pictured.every((a) => !a.image.includes(" ")), true);
+
 console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
 process.exit(failures ? 1 : 0);

@@ -65,6 +65,47 @@ function plainText(value: string) {
   return decodeHtml(withoutTags).replace(/\s+/g, " ").trim();
 }
 
+/**
+ * The rendered width a URL asks for, in real pixels.
+ *
+ * Guardian image URLs carry ?width= and ?dpr=, and a dpr of 2 means twice the
+ * pixels for the same nominal width. Anything unmeasurable sorts last.
+ */
+function pixelWidth(url: string) {
+  const width = Number(url.match(/[?&]width=(\d+)/)?.[1]);
+  if (!Number.isFinite(width)) return Number.MAX_SAFE_INTEGER;
+  return width * (Number(url.match(/[?&]dpr=(\d+)/)?.[1]) || 1);
+}
+
+/**
+ * The picture for one card.
+ *
+ * The Guardian serves card images as <picture> with around six <source
+ * srcset> renditions and, on some cards but not most, an <img src> as well —
+ * one listing page carried 324 source tags against 56 img tags. Reading only
+ * <img src> therefore missed the picture on most cards, which is why two in
+ * five indexed recipes had none.
+ *
+ * Every candidate here is a URL the Guardian itself emitted; none is
+ * constructed. The smallest is chosen because these are thumbnails in a list,
+ * often on a phone.
+ */
+function cardImage(card: string): string {
+  const candidates: string[] = [];
+
+  const img = card.match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i)?.[1];
+  if (img) candidates.push(decodeHtml(img));
+
+  for (const match of card.matchAll(/<source\b[^>]*\bsrcset=["']([^"']+)["']/gi)) {
+    // A srcset is "url 1x, url 2x" — take the URL of the first candidate.
+    const first = decodeHtml(match[1]).split(",")[0]?.trim().split(/\s+/)[0];
+    if (first) candidates.push(first);
+  }
+
+  if (!candidates.length) return "";
+  return candidates.reduce((best, url) => (pixelWidth(url) < pixelWidth(best) ? url : best));
+}
+
 export function parseListing(html: string): Article[] {
   const anchors = [...html.matchAll(/<a\b[^>]*>/gi)]
     .map((match) => ({
@@ -84,7 +125,6 @@ export function parseListing(html: string): Article[] {
     const nextIndex = anchors[index + 1]?.index ?? Math.min(anchor.index + 12000, html.length);
     const card = html.slice(anchor.index, nextIndex);
 
-    const imageTag = card.match(/<img\b[^>]*\bsrc=["'][^"']+["'][^>]*>/i)?.[0] ?? "";
     const headline = card.match(/<h3\b[^>]*class=["'][^"']*card-headline[^"']*["'][^>]*>([\s\S]*?)<\/h3>/i)?.[1] ?? "";
     const kicker = headline.match(/<div\b[^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? "";
     // Generated class name, so this is the first thing to break on a Guardian
@@ -97,7 +137,7 @@ export function parseListing(html: string): Article[] {
       description: plainText(description),
       kicker: plainText(kicker),
       published: dateFromUrl(anchor.href),
-      image: attribute(imageTag, "src"),
+      image: cardImage(card),
     });
   });
 
