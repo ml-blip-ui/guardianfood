@@ -1,22 +1,24 @@
 # Keeps data/recipes.json — the app's own searchable index — up to date.
 #
-# The weekly run reads only the newest few pages, which is all it takes: new
+# The scheduled run reads only the newest few pages, which is all it takes: new
 # recipes appear at the front of /tone/recipes, and rows are merged by path so
 # a top-up adds what is new without touching what is already there.
 #
-# For the first build, or after a long gap, run this by hand from the Actions
-# tab and leave "pages" blank to walk the whole archive.
+# To rebuild from scratch, or to fill in images after a parser change, run this
+# by hand from the Actions tab with pages set to "all".
 #
-# Scheduled runs only ever fire from the repository's default branch, so this
-# file has to be merged there before the Monday schedule does anything.
+# Each run that finds anything commits, and that commit is what rebuilds the
+# site — so how often this fires is also how often the host is asked to build.
 
 name: Refresh the recipe index
 
 on:
   schedule:
-    # Mondays, 06:00 UTC. The Feast lands over the weekend, so Monday morning
-    # catches the week's recipes with one small run.
-    - cron: "0 6 * * 1"
+    # The 1st and 21st, 06:00 UTC — roughly every 20 days, which is as close as
+    # cron gets: it counts days within a month and cannot express an interval
+    # that runs across the boundary. So the gaps alternate, 20 days then 10 or
+    # 11, rather than being even. That is about 24 runs a year in place of 52.
+    - cron: "0 6 1,21 * *"
   workflow_dispatch:
     inputs:
       pages:
@@ -56,7 +58,11 @@ jobs:
           if [ "$pages" = "all" ]; then
             npm run crawl
           elif [ -z "$pages" ]; then
-            npm run crawl -- 3
+            # The Guardian publishes around two or three recipes a day, so a
+            # 20-day gap leaves roughly 50 to collect — two and a half pages.
+            # Six is headroom for a busy spell like Christmas, and costs six
+            # requests rather than three.
+            npm run crawl -- 6
           elif printf '%s' "$pages" | grep -qE '^[0-9]{1,4}$'; then
             npm run crawl -- "$pages"
           else
