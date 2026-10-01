@@ -39,9 +39,9 @@ export type TabKey = "start" | "ingredients" | "cuisines" | "writers" | "saved";
 export const TABS: { key: TabKey; label: string }[] = [
   { key: "start", label: "Quick" },
   { key: "ingredients", label: "Ingredients" },
-  { key: "cuisines", label: "Cuisines" },
-  { key: "writers", label: "Writers" },
   { key: "saved", label: "Saved" },
+  { key: "writers", label: "Writers" },
+  { key: "cuisines", label: "Cuisines" },
 ];
 
 /**
@@ -69,13 +69,6 @@ const series = (slug: string) => `/food/series/${slug}`;
 
 const START: Shelf[] = [
   {
-    id: "all-recipes",
-    name: "All Guardian recipes",
-    group: "The main feeds",
-    paths: ["/tone/recipes"],
-    recipesOnly: false,
-  },
-  {
     id: "feast",
     name: "The Feast",
     group: "The main feeds",
@@ -83,6 +76,13 @@ const START: Shelf[] = [
     recipesOnly: false,
     weekly: true,
     note: "Grouped into weekly issues, as it appears in print.",
+  },
+  {
+    id: "all-recipes",
+    name: "All Guardian recipes",
+    group: "The main feeds",
+    paths: ["/tone/recipes"],
+    recipesOnly: false,
   },
   { id: "quick-and-easy", name: "Quick and easy", group: "Weeknight cooking", paths: [series("quick-and-easy")] },
   { id: "30-minute", name: "30 minute meals", group: "Weeknight cooking", paths: [series("30-minute-recipes")] },
@@ -309,4 +309,5 @@ export function tabOf(id: string): TabKey {
   return "start";
 }
 
-export const DEFAULT_SHELF_ID = "quick-and-easy";
+/** Where the app opens. The Feast is the week's issue, so it leads. */
+export const DEFAULT_SHELF_ID = "feast";
